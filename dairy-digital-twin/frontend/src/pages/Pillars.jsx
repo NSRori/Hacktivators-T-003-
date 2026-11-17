@@ -309,7 +309,7 @@ export function LogPage({ frame }) {
         <Panel wid="log" title="Log" zoom="fill" className="flex-[1.5_1_560px]" right={(
           <div className="flex flex-wrap gap-1">
             {FILTERS.map(([k, l]) => (
-              <button key={k} onClick={() => setF(k)} className={`rounded-md px-2.5 py-1 text-[13.5px] ${f === k ? 'bg-accent text-white' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
+              <button key={k} onClick={() => setF(k)} className={`rounded-md px-2.5 py-1 text-[13.5px] ${f === k ? 'bg-brand-deep text-white' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
           </div>
         )} bodyClass="!p-0 flex flex-col">

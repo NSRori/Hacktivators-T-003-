@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { fmt, fmtInt, LABEL, LEGACY, SCENARIOS, TONE, UNITS } from '../lib/twin'
-import { Panel, STATUS_ICON, StatusBadge } from './ui'
+import { Num, Panel, STATUS_ICON, StatusBadge } from './ui'
 
 const RANK = { OK: 0, WATCH: 1, MAINT: 1, WARN: 2, QUARANTINED: 2, CRITICAL: 3 }
 
@@ -9,7 +9,7 @@ function LegacyPanel({ legacy }) {
   const L = LEGACY[legacy.overall]
   return (
     <div className="hmi flex flex-col p-3.5">
-      <div className="flex items-center justify-between text-[12px] text-[#9AA3A9]"><span>LEGACY SCADA</span><span>fixed limits</span></div>
+      <div className="flex items-center justify-between text-[12px] text-[#B9C1C6]"><span>LEGACY SCADA</span><span>fixed limits</span></div>
       <div className="mt-3 flex items-center gap-2.5">
         <span className="h-5 w-5 rounded-sm" style={{ background: L.hex }} />
         <span className="text-[26px] font-medium uppercase leading-none tracking-wide" style={{ color: L.hex }}>{L.word}</span>
@@ -20,8 +20,8 @@ function LegacyPanel({ legacy }) {
           return (
             <li key={u} className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ background: LEGACY[x.status].hex }} />
-              <span className="truncate text-[#D7DCDF]">{LABEL[u]}</span>
-              <span className="ml-auto truncate text-[12.5px] text-[#9AA3A9]">{x.status === 'GREEN' ? (x.reason === 'within limits' ? 'ok' : x.reason) : x.reason}</span>
+              <span className="truncate text-[#E4E8EA]">{LABEL[u]}</span>
+              <span className="ml-auto truncate text-[12.5px] text-[#B9C1C6]">{x.reason === 'within limits' ? 'ok' : x.reason.startsWith('offline') ? 'offline' : x.reason}</span>
             </li>
           )
         })}
@@ -79,7 +79,7 @@ export function DetectionTimeline({ frame }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[14px] font-semibold text-ink">Who noticed first?</span>
         {lead !== null && lead > 0 ? (
-          <span className="text-[14px] text-ink-2"><b className="num text-[22px] font-semibold text-accent">{lead} min</b> {l === null ? 'and counting' : ''} earlier warning</span>
+          <span className="text-[14px] text-ink-2"><b className="num text-[22px] font-semibold text-accent"><Num value={lead} /> min</b> {l === null ? 'ahead · legacy still silent' : 'earlier warning'}</span>
         ) : <span className="text-[14px] text-ink-2">engine watching…</span>}
       </div>
       <div className="relative mx-2 mb-12 mt-4 h-1.5 rounded-sm bg-line-2">
@@ -131,10 +131,10 @@ export function KpiRow({ frame, className = '' }) {
   const sret = k.scenario_retention_pct
   const lost = k.wasted_l + k.unsafe_l + k.at_risk_l
   const tiles = [
-    { label: 'Bottling now', v: fmt(k.throughput_lpm), u: 'L/min', sub: `${fmt(ret)} % of target`, tone: ret >= 95 ? 'text-ink' : ret >= 80 ? 'text-warn-ink' : 'text-crit' },
-    { label: 'Output kept', v: sret === null ? '—' : fmt(sret, 1), u: sret === null ? '' : '%', sub: sret === null ? 'no scenario yet' : 'since scenario start', tone: sret === null || sret >= 95 ? 'text-ink' : sret >= 85 ? 'text-warn-ink' : 'text-crit' },
-    { label: 'Milk lost or unsafe', v: fmtInt(lost), u: 'L', sub: lost ? `${fmtInt(k.wasted_l)} spilled · ${fmtInt(k.unsafe_l + k.at_risk_l)} unsafe` : 'none', tone: lost ? 'text-crit' : 'text-ink' },
-    { label: 'Filler stopped', v: fmt(k.starved_min), u: 'min', sub: k.starved_min ? 'waiting for milk' : 'never ran dry', tone: k.starved_min ? 'text-warn-ink' : 'text-ink' },
+    { label: 'Bottling now', v: <Num value={k.throughput_lpm} />, u: 'L/min', sub: `${fmt(ret)} % of target`, tone: ret >= 95 ? 'text-ink' : ret >= 80 ? 'text-warn-ink' : 'text-crit' },
+    { label: 'Output kept', v: sret === null ? '—' : <Num value={sret} d={1} />, u: sret === null ? '' : '%', sub: sret === null ? 'no scenario yet' : 'since scenario start', tone: sret === null || sret >= 95 ? 'text-ink' : sret >= 85 ? 'text-warn-ink' : 'text-crit' },
+    { label: 'Milk lost or unsafe', v: <Num value={lost} int />, u: 'L', sub: lost ? `${fmtInt(k.wasted_l)} spilled · ${fmtInt(k.unsafe_l + k.at_risk_l)} unsafe` : 'none', tone: lost ? 'text-crit' : 'text-ink' },
+    { label: 'Filler stopped', v: <Num value={k.starved_min} />, u: 'min', sub: k.starved_min ? 'waiting for milk' : 'never ran dry', tone: k.starved_min ? 'text-warn-ink' : 'text-ink' },
   ]
   // 4 across when the card is wide enough, otherwise 2 x 2: the tiles never squeeze their text into the next card
   return (

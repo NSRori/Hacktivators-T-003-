@@ -1,58 +1,117 @@
-import { ArrowRight } from 'lucide-react'
-import { fmt, SCENARIOS, TONE, UNIT_INFO, UNITS } from '../lib/twin'
+import { useEffect, useState } from 'react'
+import { ArrowRight, Radar, ShieldCheck, Timer } from 'lucide-react'
+import { SCENARIOS, TONE, UNIT_INFO, UNITS } from '../lib/twin'
 import { LogoMark } from '../components/Chrome'
-import { Button, Panel } from '../components/ui'
+import { Button, Num, Panel } from '../components/ui'
 
-/* Hand-drawn line schematic of the six-stage line; pipes animate with live flow. */
-function Schematic({ flowing }) {
-  const S = '#0B6FA8'
-  const pipe = (d, k) => (
-    <g key={k}>
-      <path d={d} fill="none" stroke="#D3DEEA" strokeWidth="9" strokeLinecap="round" />
-      <path d={d} fill="none" stroke="#0091D3" strokeWidth="2.5" className={flowing ? 'flow-dash' : ''} style={{ animationDuration: '0.9s' }} />
-    </g>
-  )
-  const label = (x, y, t) => <text x={x} y={y} textAnchor="middle" fontSize="13" fill="#4B5D6E" fontFamily="IBM Plex Sans">{t}</text>
+/* The problem in ten seconds: a looping illustration (not live data) of a valve that clogs while every
+   legacy reading stays inside its limits, the slowdown travelling down the line, and the engine fixing it. */
+const LOOP = [
+  { ms: 2600, engine: ['ok', 'Balanced: every stage keeps pace with the next'] },
+  { ms: 3000, engine: ['warn', 'Homogenizer valve clogging: root cause found'] },
+  { ms: 3200, engine: ['crit', 'Surge tank empties next, then the filler starves'] },
+  { ms: 3200, engine: ['ok', 'Auto-Sync rebalanced the line: output kept'] },
+]
+const HUE = { ok: '#3DB07E', warn: '#E3A41A', crit: '#E5604F', flow: '#1AA3E6', milk: '#CFE6F6', steel: '#8A7462' }
+
+function useLoop() {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined
+    const t = setTimeout(() => setI((x) => (x + 1) % LOOP.length), LOOP[i].ms)
+    return () => clearTimeout(t)
+  }, [i])
+  return i
+}
+
+function Schematic({ phase }) {
+  const S = '#4FB3EA'
+  const unit = (u) => (phase === 1 && u === 'homog') || (phase === 2 && u === 'homog') ? HUE.warn
+    : phase === 2 && u === 'surge' ? HUE.warn : phase === 2 && u === 'filler' ? HUE.crit
+      : phase === 3 && u === 'homog' ? HUE.ok : S
+  const down = phase === 2
+  const pipe = (d, k, hot) => {
+    const c = hot ? HUE.warn : HUE.flow
+    const dur = hot ? 3.2 : 1.6
+    return (
+      <g key={k}>
+        <path d={d} fill="none" stroke="#4D3828" strokeWidth="9" strokeLinecap="round" />
+        <path d={d} fill="none" stroke={c} strokeWidth="2.5" className="flow-dash" style={{ animationDuration: `${hot ? 1.8 : 0.9}s`, transition: 'stroke .5s' }} />
+        {[0, 1].map((i) => (
+          <circle key={`${i}${hot}`} r="2.6" fill={hot ? HUE.warn : HUE.milk} style={{ filter: `drop-shadow(0 0 3px ${hot ? HUE.warn : HUE.milk})` }}>
+            <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={`-${i * dur / 2}s`} path={d} />
+          </circle>
+        ))}
+      </g>
+    )
+  }
+  const label = (x, y, t, c = '#CDBBA8') => <text x={x} y={y} textAnchor="middle" fontSize="13" fill={c} fontFamily="IBM Plex Sans" style={{ transition: 'fill .5s' }}>{t}</text>
+  const ring = (cx, cy, r, c) => <circle cx={cx} cy={cy} r={r} fill="none" stroke={c} strokeWidth="2" className="home-ring" />
+  const surgeLevel = phase === 2 ? 10 : 42
   return (
     <svg viewBox="16 44 600 220" className="h-auto w-full" role="img" aria-label="Schematic of the dairy line: silo, two pasteurizers, homogenizer, surge tank, filler, packaging">
-      {[
-        'M78 150 H118 V88 H150', 'M118 150 V212 H150', 'M232 88 H262 V150 H290', 'M232 212 H262 V150',
-        'M352 150 H392', 'M452 150 H482', 'M532 150 H556',
-      ].map(pipe)}
+      {[['M78 150 H118 V88 H150'], ['M118 150 V212 H150'], ['M232 88 H262 V150 H290'], ['M232 212 H262 V150']].map(([d], k) => pipe(d, k, false))}
+      {[['M352 150 H392'], ['M452 150 H482'], ['M532 150 H556']].map(([d], k) => pipe(d, `d${k}`, down))}
       {/* silo */}
-      <rect x="28" y="60" width="50" height="130" rx="14" fill="#fff" stroke={S} strokeWidth="2" />
-      <rect x="32" y="114" width="42" height="72" rx="10" fill="#A9D2EE" />
+      <rect x="28" y="60" width="50" height="130" rx="14" fill="#1A110B" stroke={S} strokeWidth="2" />
+      <rect x="32" y="114" width="42" height="72" rx="10" fill={HUE.milk} opacity=".9" />
       <path d="M36 190 L32 214 M70 190 L74 214" stroke={S} strokeWidth="2" />
       {label(53, 236, 'Silo')}
       {/* pasteurizers */}
       {[[150, 62, 'Pasteurizer A'], [150, 186, 'Pasteurizer B']].map(([x, y, t]) => (
         <g key={t}>
-          <rect x={x} y={y} width="82" height="52" rx="6" fill="#fff" stroke={S} strokeWidth="2" />
+          <rect x={x} y={y} width="82" height="52" rx="6" fill="#1A110B" stroke={S} strokeWidth="2" />
           {[0, 1, 2, 3, 4].map((i) => <line key={i} x1={x + 14 + i * 13} x2={x + 14 + i * 13} y1={y + 10} y2={y + 42} stroke="#84BEE5" strokeWidth="2" />)}
           {label(x + 41, y + (y < 100 ? -8 : 70), t)}
         </g>
       ))}
-      {/* homogenizer */}
-      <rect x="290" y="118" width="62" height="64" rx="6" fill="#fff" stroke={S} strokeWidth="2" />
-      <path d="M302 162 A19 19 0 0 1 340 162" fill="none" stroke="#CFE5D8" strokeWidth="5" />
-      <line x1="321" y1="162" x2="331" y2="146" stroke="#152A3B" strokeWidth="2" />
-      {label(321, 202, 'Homogenizer')}
+      {/* homogenizer: the needle stays in the green band the whole time - that is the point */}
+      {(phase === 1 || phase === 2) && ring(321, 150, 44, HUE.warn)}
+      <rect x="290" y="118" width="62" height="64" rx="6" fill="#1A110B" stroke={unit('homog')} strokeWidth="2.5" style={{ transition: 'stroke .5s' }} />
+      <path d="M302 162 A19 19 0 0 1 340 162" fill="none" stroke="#24503A" strokeWidth="5" />
+      <line x1="321" y1="162" x2={phase === 0 || phase === 3 ? 331 : 334} y2={phase === 0 || phase === 3 ? 146 : 149} stroke="#F4EDE5" strokeWidth="2" style={{ transition: 'all .8s' }} />
+      {label(321, 202, 'Homogenizer', unit('homog') === S ? '#CDBBA8' : unit('homog'))}
       {/* surge tank */}
-      <rect x="392" y="104" width="60" height="92" rx="12" fill="#fff" stroke={S} strokeWidth="2" />
-      <rect x="396" y="150" width="52" height="42" rx="8" fill="#A9D2EE" />
-      <line x1="388" x2="456" y1="150" y2="150" stroke="#152A3B" strokeDasharray="3 3" />
-      {label(422, 216, 'Surge tank')}
+      <rect x="392" y="104" width="60" height="92" rx="12" fill="#1A110B" stroke={unit('surge')} strokeWidth="2.5" style={{ transition: 'stroke .5s' }} />
+      <rect x="396" y={192 - surgeLevel} width="52" height={surgeLevel} rx="8" fill={phase === 2 ? HUE.warn : HUE.milk} opacity=".9" style={{ transition: 'all 1.2s ease' }} />
+      <line x1="388" x2="456" y1="150" y2="150" stroke="#CDBBA8" strokeDasharray="3 3" />
+      {label(422, 216, 'Surge tank', unit('surge') === S ? '#CDBBA8' : unit('surge'))}
       {/* filler */}
-      <rect x="482" y="112" width="50" height="76" rx="6" fill="#fff" stroke={S} strokeWidth="2" />
-      {[0, 1, 2].map((i) => <rect key={i} x={489 + i * 13} y="160" width="9" height="20" rx="1.5" fill="#F0F5FA" stroke={S} strokeWidth="1.5" />)}
+      {phase === 2 && ring(507, 150, 40, HUE.crit)}
+      <rect x="482" y="112" width="50" height="76" rx="6" fill="#1A110B" stroke={unit('filler')} strokeWidth="2.5" style={{ transition: 'stroke .5s' }} />
+      {[0, 1, 2].map((i) => <rect key={i} x={489 + i * 13} y="160" width="9" height="20" rx="1.5" fill="#2C1F15" stroke={S} strokeWidth="1.5" />)}
       <path d="M494 124 V146 M507 124 V146 M520 124 V146" stroke="#84BEE5" strokeWidth="2" />
-      {label(507, 208, 'Filler')}
+      {label(507, 208, 'Filler', unit('filler') === S ? '#CDBBA8' : unit('filler'))}
       {/* packaging */}
-      {[[560, 158], [578, 158], [569, 140]].map(([x, y], i) => <rect key={i} x={x} y={y} width="16" height="18" rx="1.5" fill="#F0F5FA" stroke={S} strokeWidth="1.5" />)}
+      {[[560, 158], [578, 158], [569, 140]].map(([x, y], i) => <rect key={i} x={x} y={y} width="16" height="18" rx="1.5" fill="#2C1F15" stroke={S} strokeWidth="1.5" />)}
       {label(578, 200, 'Cold chain')}
     </svg>
   )
 }
+
+function LoopMonitors({ phase }) {
+  const [tone, msg] = LOOP[phase].engine
+  const col = HUE[tone]
+  return (
+    <div className="grid gap-2 sm:grid-cols-[auto_1fr]">
+      <div className="hmi flex items-center gap-2.5 px-3 py-2">
+        <span className="text-[11.5px] leading-tight text-[#B9C1C6]">LEGACY<br />SCADA</span>
+        <span className="h-3 w-3 rounded-[2px] bg-[#4CC46B]" />
+        <span className="text-[17px] font-semibold tracking-wide text-[#4CC46B]">ALL GREEN</span>
+      </div>
+      <div key={phase} className="rise flex items-center gap-2.5 rounded-md border px-3 py-2" style={{ borderColor: `${col}88`, background: `${col}1A` }}>
+        <span className="text-[11.5px] font-semibold leading-tight" style={{ color: col }}>OUR<br />ENGINE</span>
+        <span className="text-[15px] font-medium leading-snug text-ink">{msg}</span>
+      </div>
+    </div>
+  )
+}
+
+const RESULTS = [
+  { icon: Radar, big: '70+', unit: 'min', text: 'earlier than the legacy alarm, on a clogging valve whose pressure never left its limits.' },
+  { icon: Timer, big: '96', unit: '%', text: 'of bottling output kept by Auto-Sync during the same fault, against about 69 % without it.' },
+  { icon: ShieldCheck, big: '0', unit: 'shutdowns', text: 'when a pasteurizer is hacked: it is isolated within minutes and its twin carries all the milk.' },
+]
 
 const PROBLEMS = [
   ['Alarms judge one sensor at a time.', 'A legacy SCADA checks each reading against a fixed limit. A slow problem that stays inside its limit is invisible until it is too late.'],
@@ -71,10 +130,11 @@ const PILLARS = [
 
 export default function Home({ frame, connected, go, run }) {
   const live = frame && connected
+  const phase = useLoop()
   const eng = frame?.engine.overall
   return (
     <div className="min-h-screen">
-      <header className="border-b border-line bg-surface">
+      <header className="sticky top-0 z-40 border-b border-line bg-[#150D08]/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-6 px-6">
           <div className="flex items-center gap-2.5"><LogoMark size={32} /><span className="text-[17px] font-semibold text-ink">Dairy Digital Twin</span></div>
           <nav className="ml-6 hidden gap-6 text-[14.5px] text-ink-2 md:flex">
@@ -92,8 +152,12 @@ export default function Home({ frame, connected, go, run }) {
         <div className="mx-auto grid max-w-[1240px] items-center gap-12 px-6 py-16 lg:grid-cols-[1.05fr_1fr]">
           <div>
             <div className="inline-block rounded-md border border-line bg-surface px-2.5 py-1 text-[14px] font-semibold text-accent">RNSIT Hackathon · Problem statement 1 · Beyond the Factory Floor</div>
-            <h1 className="mt-4 text-[46px] font-semibold leading-[1.08] tracking-tight text-ink">
-              Your SCADA says all green.<br />Your milk says otherwise.
+            <h1 className="mt-5 text-[50px] font-semibold leading-[1.1] tracking-tight text-ink">
+              Your SCADA <span className="whitespace-nowrap">says <span className="hmi inline-block translate-y-[-4px] px-2.5 py-0.5 align-middle text-[0.62em] font-semibold tracking-wide !text-[#4CC46B]">ALL GREEN</span>.</span><br />
+              Your milk says <span className="relative inline-block">otherwise
+                <svg className="pointer-events-none absolute -bottom-2 left-0 h-3 w-full overflow-visible" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden>
+                  <path className="scribble" d="M2 8 C 40 2, 70 11, 105 6 S 170 3, 198 7" fill="none" stroke="#E5604F" strokeWidth="3.5" strokeLinecap="round" />
+                </svg></span>.
             </h1>
             <p className="mt-5 max-w-[560px] text-[18px] leading-relaxed text-ink">
               A live digital twin of a dairy processing line that finds what one-sensor-at-a-time alarms miss: a slowly clogging
@@ -105,19 +169,36 @@ export default function Home({ frame, connected, go, run }) {
               <a href="#demo" className="inline-flex items-center rounded-md border border-line bg-surface px-5 py-2.5 text-[15px] font-semibold text-ink hover:bg-surface-2">Three-minute demo guide</a>
             </div>
           </div>
-          <Panel wid="schematic" controls="zoom" title="The line, live" sub="Milk enters at the silo and leaves as cartons." className="h-full" bodyClass="flex flex-col justify-between">
-            <Schematic flowing={!!live} />
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line-2 pt-4 text-[14px] text-ink-2">
+          <Panel wid="schematic" controls="zoom" title="The problem, in ten seconds" sub="An illustrated loop: a valve clogs, the slowdown travels down the line, and only one monitor notices." className="h-full" bodyClass="flex flex-col justify-between gap-3">
+            <Schematic phase={phase} />
+            <LoopMonitors phase={phase} />
+            <div className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line-2 pt-3.5 text-[14px] text-ink-2">
               {live ? (
                 <>
-                  <span className="flex items-center gap-2"><span className="live-dot h-2 w-2 rounded-full bg-ok" />Simulation running</span>
-                  <span>Bottling <b className="num text-ink">{fmt(frame.kpi.throughput_lpm)} L/min</b></span>
+                  <span className="flex items-center gap-2 font-semibold text-ink"><span className="live-dot h-2 w-2 rounded-full bg-ok" />Live plant</span>
+                  <span>Bottling <b className="num text-ink"><Num value={frame.kpi.throughput_lpm} /> L/min</b></span>
                   <span>Engine <b className={TONE[eng].text}>{eng === 'OK' ? 'balanced' : TONE[eng].word.toLowerCase()}</b></span>
                 </>
               ) : <span>Start the backend to see live numbers here.</span>}
             </div>
           </Panel>
         </div>
+      </section>
+
+      {/* what it buys you, in three numbers */}
+      <section className="mx-auto max-w-[1240px] px-6">
+        <div className="grid gap-px overflow-hidden rounded-xl border border-line bg-line md:grid-cols-3">
+          {RESULTS.map(({ icon: Icon, big, unit, text }) => (
+            <div key={big + unit} className="flex gap-4 bg-surface/95 p-6">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-accent-2 text-accent"><Icon size={22} /></span>
+              <div>
+                <div className="num text-[34px] font-semibold leading-none tracking-tight text-ink">{big}<span className="ml-1 text-[16px] font-medium text-ink-2">{unit}</span></div>
+                <p className="mt-2 text-[15px] leading-snug text-ink-2">{text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2.5 text-[13px] text-ink-3">Measured in our simulation (fixed seed). Run any scenario in the live twin to see it happen.</p>
       </section>
 
       {/* problem */}
@@ -197,7 +278,7 @@ export default function Home({ frame, connected, go, run }) {
         </div>
       </section>
 
-      <footer className="border-t border-line bg-surface">
+      <footer className="border-t border-line bg-[#150D08]/80">
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-8 gap-y-2 px-6 py-8 text-[14px] text-ink-2">
           <span>All figures come from a simplified simulation (illustrative physics, fixed random seed), not real plant measurements.</span>
           <span className="ml-auto">FastAPI · WebSockets · scikit-learn · NetworkX · React Flow</span>

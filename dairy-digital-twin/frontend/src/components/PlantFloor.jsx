@@ -1,32 +1,51 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Background, BaseEdge, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, NodeToolbar, Position, ReactFlow } from '@xyflow/react'
 import { MousePointerClick, ShieldAlert, X } from 'lucide-react'
-import { fmt, fmtInt, post, TONE, UNIT_INFO } from '../lib/twin'
-import { actionsFor, openTicket } from '../lib/actions'
-import { BTN, Panel, StatusBadge } from './ui'
+import { fmt, post, TONE, UNIT_INFO } from '../lib/twin'
+import { actionsFor, chillerSpoofed, openTicket } from '../lib/actions'
+import { sfx } from '../lib/feel'
+import { BTN, Num, Panel, StatusBadge } from './ui'
 import { useZoomed } from './widgets'
 
 const W = 252
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
-const C = { line: '#D3DEEA', line2: '#E3EAF2', steel: '#7F93A6', ink: '#152A3B', ink2: '#4B5D6E', accent: '#0B6FA8', flow: '#0091D3', milk: '#A9D2EE',
-  shell: '#F4F8FC', ok: '#2E7D5B', okTint: '#CFE5D8', warn: '#C98A00', crit: '#B83A2E', iso: '#6B3FA0' }
+const CALM = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const C = { line: '#4D3828', line2: '#36271B', steel: '#8A7462', ink: '#F4EDE5', ink2: '#CDBBA8', accent: '#4FB3EA', flow: '#1AA3E6', milk: '#CFE6F6',
+  shell: '#1A110B', ok: '#3DB07E', okTint: '#24503A', warn: '#E3A41A', crit: '#E5604F', iso: '#A07AD9' }
 
 /* ------------------------------------------------------------------ equipment drawings */
 function Vessel({ level, target = 50 }) {
+  const id = useId().replace(/[^a-zA-Z0-9]/g, '')
   const w = 54
   const h = 104
   const lv = clamp(level ?? 0, 0, 100)
-  const fillCol = lv > 95 || lv < 8 ? '#E3A79F' : lv > 82 || lv < 18 ? '#E9CC85' : C.milk
+  const fillCol = lv > 95 || lv < 8 ? '#EE8E80' : lv > 82 || lv < 18 ? '#EFC766' : C.milk
   const inner = h - 14
-  const fill = (inner * lv) / 100
+  const top = 7 + inner - (inner * lv) / 100
   const ty = 7 + inner * (1 - target / 100)
+  // a wave strip one period (28 px) wider than the tank on each side, so sliding it by one period loops seamlessly
+  const wave = (amp) => {
+    let d = 'M -23 0'
+    for (let x = -23; x < w + 28; x += 28) d += ` q 7 ${-amp} 14 0 t 14 0`
+    return `${d} V ${inner + 10} H -23 Z`
+  }
   return (
     <svg width={w + 14} height={h} viewBox={`0 0 ${w + 14} ${h}`} className="shrink-0" aria-hidden>
+      <defs>
+        <clipPath id={`c${id}`}><rect x="5" y="7" width={w - 8} height={inner} rx="8" /></clipPath>
+        <linearGradient id={`g${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={fillCol} stopOpacity="1" /><stop offset="1" stopColor={fillCol} stopOpacity="0.7" />
+        </linearGradient>
+      </defs>
       <rect x="1" y="1" width={w} height={h - 2} rx="12" fill={C.shell} stroke={C.steel} strokeWidth="2" />
-      <clipPath id={`v${target}${Math.round(lv)}`}><rect x="5" y="7" width={w - 8} height={inner} rx="8" /></clipPath>
-      <rect x="5" y={7 + inner - fill} width={w - 8} height={fill} fill={fillCol} clipPath={`url(#v${target}${Math.round(lv)})`} style={{ transition: 'all .6s ease' }} />
-      <line x1="5" x2={w - 3} y1={7 + inner - fill} y2={7 + inner - fill} stroke={C.accent} strokeWidth="1.5" style={{ transition: 'all .6s ease' }} />
-      <line x1="1" x2={w + 8} y1={ty} y2={ty} stroke={C.ink} strokeWidth="1" strokeDasharray="3 3" />
+      <g clipPath={`url(#c${id})`} opacity={lv < 0.5 ? 0 : 1}>
+        <g style={{ transform: `translateY(${top}px)`, transition: 'transform .7s cubic-bezier(.2,.8,.2,1)' }}>
+          <path className={CALM ? '' : 'tank-wave slow'} d={wave(2)} fill={fillCol} />
+          <path className={CALM ? '' : 'tank-wave'} d={wave(2.6)} fill={`url(#g${id})`} />
+        </g>
+      </g>
+      <rect x="9" y="12" width="4" height={h - 30} rx="2" fill="#fff" opacity="0.08" />
+      <line x1="1" x2={w + 8} y1={ty} y2={ty} stroke={C.ink2} strokeWidth="1" strokeDasharray="3 3" />
       <text x={w + 13} y={ty + 4} textAnchor="end" fontSize="10" fill={C.ink2}>50</text>
     </svg>
   )
@@ -65,7 +84,7 @@ function TempBar({ t, active }) {
   return (
     <div>
       <div className="relative h-2 w-full rounded-sm bg-line-2">
-        <div className="absolute inset-y-0 bg-[#CFE5D8]" style={{ left: `${x(71.5)}%`, width: `${x(75) - x(71.5)}%` }} />
+        <div className="absolute inset-y-0 bg-ok/35" style={{ left: `${x(71.5)}%`, width: `${x(75) - x(71.5)}%` }} />
         <div className="absolute -top-1 h-4 w-px bg-ink-3" style={{ left: `${x(72)}%` }} />
         <div className={`absolute -top-1.5 h-5 w-1 rounded-sm ${bad ? 'bg-crit' : 'bg-ink'}`} style={{ left: `calc(${x(t)}% - 2px)`, transition: 'left .5s' }} />
       </div>
@@ -74,19 +93,22 @@ function TempBar({ t, active }) {
   )
 }
 
-const Big = ({ v, unit, tone = 'text-ink' }) => (
-  <div className={`num text-[28px] font-semibold leading-none tracking-tight ${tone}`}>{v}<span className="ml-1 text-[14px] font-normal text-ink-2">{unit}</span></div>
+const Big = ({ n, int = false, d = 0, unit, tone = 'text-ink' }) => (
+  <div className={`num text-[28px] font-semibold leading-none tracking-tight ${tone}`}><Num value={n} int={int} d={d} /><span className="ml-1 text-[14px] font-normal text-ink-2">{unit}</span></div>
 )
 const Line = ({ children, tone = 'text-ink-2' }) => <div className={`text-[14px] leading-snug ${tone}`}>{children}</div>
 
 /* ------------------------------------------------------------------ node shell */
+const GLOW = { WARN: 'glow-warn', CRITICAL: 'glow-crit', QUARANTINED: 'glow-iso' }
+
 function Shell({ data, children, handles }) {
   const t = TONE[data.status] || TONE.OK
   const ok = data.status === 'OK'
   return (
-    <div className={`unit-card relative rounded-lg bg-surface ${ok ? 'outline-1' : 'outline-2'} outline -outline-offset-1 ${ok ? 'outline-line' : t.outline} ${data.status === 'CRITICAL' ? 'crit-outline' : ''}`}
+    <div className={`unit-card relative rounded-lg bg-surface ${ok ? 'outline-1' : 'outline-2'} outline -outline-offset-1 ${ok ? 'outline-line' : t.outline} ${data.status === 'CRITICAL' ? 'crit-outline' : ''} ${GLOW[data.quarantined ? 'QUARANTINED' : data.status] || ''}`}
       style={{ width: W }}>
       {handles}
+      {data.role && !data.quarantined && <span className={`cascade-ring ${data.role.tone === 'crit' ? 'text-crit' : 'text-warn'}`} />}
       <div className="flex items-center gap-2 px-3.5 pt-3">
         <span className="text-[15.5px] font-semibold leading-tight text-ink">{UNIT_INFO[data.id].name}</span>
         <span className="ml-auto"><StatusBadge status={data.status} /></span>
@@ -98,6 +120,9 @@ function Shell({ data, children, handles }) {
       </div>
       {data.badge && (
         <div className={`absolute -top-3 left-3.5 rounded px-2 py-0.5 text-[12px] font-semibold ${data.badge.cls}`}>{data.badge.text}</div>
+      )}
+      {data.role?.text && !data.quarantined && (
+        <div className={`absolute -top-3 right-3 rounded px-2 py-0.5 text-[12px] font-bold ${data.role.kind === 'root' ? 'bg-crit-deep text-white' : data.role.tone === 'crit' ? 'bg-crit-deep text-white' : 'bg-warn text-[#1B1405]'}`}>{data.role.text}</div>
       )}
       {data.quarantined && (
         <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border-2 border-iso bg-iso-2">
@@ -119,8 +144,8 @@ function SiloNode({ data }) {
       <div className="flex items-center gap-3">
         <Vessel level={s.level_pct} />
         <div className="space-y-1.5">
-          <Big v={fmt(s.level_pct)} unit="% full" tone={s.level_pct > 95 ? 'text-crit' : 'text-ink'} />
-          <Line>{fmtInt(s.level_l)} L of 24,000</Line>
+          <Big n={s.level_pct} unit="% full" tone={s.level_pct > 95 ? 'text-crit' : 'text-ink'} />
+          <Line><Num value={s.level_l} int /> L of 24,000</Line>
           <Line tone={s.temp_c > 6 ? 'text-crit font-semibold' : 'text-ink-2'}>Temperature {fmt(s.temp_c, 1)} °C</Line>
         </div>
       </div>
@@ -135,10 +160,11 @@ function SurgeNode({ data }) {
       <div className="flex items-center gap-3">
         <Vessel level={s.level_pct} />
         <div className="space-y-1.5">
-          <Big v={fmt(s.level_pct)} unit="% full" tone={s.level_pct < 10 ? 'text-crit' : 'text-ink'} />
-          <Line>{fmtInt(s.level_l)} L of 6,000</Line>
-          <Line tone={data.tStarve !== null ? 'text-crit font-semibold' : 'text-ink-2'}>
-            {data.tStarve !== null ? `Empties in ${fmt(data.tStarve)} min` : 'Holding steady'}</Line>
+          <Big n={s.level_pct} unit="% full" tone={s.level_pct < 10 ? 'text-crit' : 'text-ink'} />
+          <Line><Num value={s.level_l} int /> L of 6,000</Line>
+          <Line tone={data.tStarve !== null || s.level_pct < 8 ? 'text-crit font-semibold' : 'text-ink-2'}>
+            {data.tStarve !== null ? `Empties in ${fmt(data.tStarve)} min`
+              : s.level_pct < 8 ? 'Empty: filler starving' : s.level_pct > 92 ? 'Nearly full' : 'Holding steady'}</Line>
         </div>
       </div>
     </Shell>
@@ -150,7 +176,7 @@ function PasteurizerNode({ data }) {
   return (
     <Shell data={data} handles={[h('target', Position.Left, 'l'), h('source', Position.Right, 'r')]}>
       <div className="flex items-baseline justify-between">
-        <Big v={fmt(s.flow_lpm)} unit="L/min" />
+        <Big n={s.flow_lpm} unit="L/min" />
         <span className="num text-[16px] font-semibold text-ink">{fmt(s.temp_c, 1)} °C</span>
       </div>
       {data.spoof && (
@@ -169,7 +195,7 @@ function HomogNode({ data }) {
     <Shell data={data} handles={[h('target', Position.Left, 'l'), h('source', Position.Bottom, 'b')]}>
       <div className="flex items-center gap-2">
         <Gauge value={s.pressure_psi} />
-        <Big v={fmt(s.flow_lpm)} unit="L/min" />
+        <Big n={s.flow_lpm} unit="L/min" />
       </div>
       <Line tone="text-[13px] text-ink-2">Green arc: legacy “OK” range</Line>
     </Shell>
@@ -180,7 +206,7 @@ function FillerNode({ data }) {
   const s = data.s
   return (
     <Shell data={data} handles={[h('target', Position.Right, 'r'), h('source', Position.Left, 'l')]}>
-      <Big v={fmt(s.flow_lpm)} unit="L/min" tone={s.starved ? 'text-crit' : 'text-ink'} />
+      <Big n={s.flow_lpm} unit="L/min" tone={s.starved ? 'text-crit' : 'text-ink'} />
       <div className="mt-2.5 h-2 rounded-sm bg-line-2">
         <div className={`h-full rounded-sm ${s.starved ? 'bg-crit' : 'bg-accent'}`} style={{ width: `${clamp(s.flow_lpm / 8, 0, 100)}%`, transition: 'width .5s' }} />
       </div>
@@ -193,7 +219,7 @@ function PackagingNode({ data }) {
   const s = data.s
   return (
     <Shell data={data} handles={[h('target', Position.Right, 'r')]}>
-      <Big v={fmtInt(s.units_total)} unit="cartons" />
+      <Big int n={s.units_total} unit="cartons" />
       <Line tone="mt-2 text-ink-2">{fmt(s.rate_lpm)} per min · cold room {fmt(s.cold_room_temp_c, 1)} °C</Line>
     </Shell>
   )
@@ -204,7 +230,7 @@ function InfoCard({ id, data, pinned, actions, onAct, onClose }) {
   const info = UNIT_INFO[id]
   const t = TONE[data.status] || TONE.OK
   return (
-    <div className="nodrag nopan w-[330px] rounded-lg border border-line bg-surface p-4 text-left shadow-[0_12px_32px_-12px_rgba(27,42,51,0.35)]"
+    <div className="nodrag nopan w-[330px] rounded-lg border border-line bg-surface p-4 text-left shadow-[0_22px_50px_-16px_rgba(0,0,0,0.9)] ring-1 ring-[#84BEE5]/15"
       onClick={(e) => e.stopPropagation()}>
       <div className="flex items-start gap-2">
         <div>
@@ -238,6 +264,18 @@ function InfoCard({ id, data, pinned, actions, onAct, onClose }) {
 }
 
 /* ------------------------------------------------------------------ pipes */
+/* Drops of milk travelling along a pipe. More drops and faster travel when more litres flow; the timing is
+   rounded so a small change in flow does not restart the animation every tick. */
+function Particles({ path, flow, color }) {
+  const n = clamp(Math.round(flow / 170), 1, 5)
+  const dur = Math.round(clamp(2600 / Math.max(flow, 1), 1.4, 9) * 2) / 2
+  return Array.from({ length: n }, (_, i) => (
+    <circle key={`${i}-${n}-${dur}-${color}`} r="2.7" fill={color} style={{ filter: `drop-shadow(0 0 3px ${color})` }}>
+      <animateMotion dur={`${dur}s`} repeatCount="indefinite" begin={`-${((i * dur) / n).toFixed(2)}s`} path={path} />
+    </circle>
+  ))
+}
+
 function Pipe(props) {
   const { id, data, markerEnd } = props
   const [path, lx, ly] = getSmoothStepPath({ ...props, borderRadius: 16, offset: 24 })
@@ -248,9 +286,11 @@ function Pipe(props) {
     <>
       <path d={path} fill="none" stroke={C.line} strokeWidth={13} strokeLinecap="round" />
       <path d={path} fill="none" stroke={C.shell} strokeWidth={9} strokeLinecap="round" />
+      {moving && <path d={path} fill="none" stroke={color} strokeWidth={11} strokeOpacity={0.14} strokeLinecap="round" />}
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className={moving ? 'flow-dash' : ''}
         style={{ stroke: color, strokeWidth: moving ? 2 + Math.min(3.5, flow / 240) : 2, strokeDasharray: data.blocked ? '4 5' : undefined,
           animationDuration: `${clamp(320 / Math.max(flow, 1), 0.3, 3)}s` }} />
+      {moving && !CALM && <Particles path={path} flow={flow} color={data.spoof || data.tone === 'CRITICAL' ? C.crit : data.tone === 'WARN' ? C.warn : C.milk} />}
       <EdgeLabelRenderer>
         <div className="nodrag nopan num absolute rounded border bg-surface px-1.5 py-px text-[12.5px] font-semibold"
           style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)`, color: data.blocked ? C.iso : data.spoof ? C.crit : C.ink,
@@ -308,7 +348,7 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
   }, [])
   useEffect(() => () => setHover(null), [setHover])   // leaving the focus view: no hover card left hanging
   return (
-    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[9px] bg-[#F8FBFE]">
+    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[11px] bg-[#150E09]">
       <NodeData.Provider value={view}>
         <Ui.Provider value={ui}>
           <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
@@ -318,12 +358,12 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
               setTimeout(() => inst.fitView(FIT), 300)
               document.fonts?.ready.then(() => inst.fitView(FIT))
             }}
-            onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)}
+            onNodeMouseEnter={(_, n) => { setHover(n.id); sfx.hover() }} onNodeMouseLeave={() => setHover(null)}
             onNodeClick={(_, n) => setPinned((p) => (p === n.id ? null : n.id))} onPaneClick={() => setPinned(null)}
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
             zoomOnScroll={zoomed} panOnDrag={zoomed} zoomOnDoubleClick={zoomed} zoomOnPinch={zoomed} preventScrolling={zoomed}
             minZoom={0.3} maxZoom={2.5} style={{ background: 'transparent' }}>
-            <Background color="#D3E0EC" bgColor="#F8FBFE" gap={22} size={1.2} />
+            <Background color="#3B2B1F" bgColor="#150E09" gap={22} size={1.2} />
             {zoomed && <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT} />}
           </ReactFlow>
         </Ui.Provider>
@@ -350,15 +390,33 @@ export default function PlantFloor({ frame, notify, className = '' }) {
     for (const [pump, unit] of [['homogenizer_pump_1', 'homogenizer'], ['pasteurizer_a_pump', 'pasteurizer_a']]) {
       const t = openTicket(tickets, pump)
       if (!t) continue
-      badge[unit] = t.status === 'FAILED' ? { text: 'Pump failed', cls: 'bg-crit text-white' }
-        : t.status === 'DISPATCHED' ? { text: 'Technician on the way', cls: 'bg-accent text-white' }
-          : { text: `Pump fails in ${fmt(t.rul_min)} min`, cls: t.priority === 'CRITICAL' ? 'bg-crit text-white' : 'bg-warn text-ink' }
+      badge[unit] = t.status === 'FAILED' ? { text: 'Pump failed', cls: 'bg-crit-deep text-white' }
+        : t.status === 'DISPATCHED' ? { text: 'Technician on the way', cls: 'bg-brand-deep text-white' }
+          : { text: `Pump fails in ${fmt(t.rul_min)} min`, cls: t.priority === 'CRITICAL' ? 'bg-crit-deep text-white' : 'bg-warn text-[#1B1405]' }
     }
-    if (s.homogenizer.flushing) badge.homogenizer = { text: 'Self-cleaning', cls: 'bg-accent text-white' }
+    if (s.homogenizer.flushing) badge.homogenizer = { text: 'Self-cleaning', cls: 'bg-brand-deep text-white' }
     const aSpoof = chk.pasteurizer_a.mismatch_pct > 12
 
+    // where the problem starts and where it will hurt next: drawn as rings and tags on the floor
+    const role = {}
+    const p1 = frame.engine.pillar1
+    for (const x of p1.cascade) {
+      if (x.from && !role[x.from]) role[x.from] = { kind: 'root', text: 'Root cause', tone: 'crit' }
+      if (x.node && !role[x.node] && !(x.eta_min !== null && x.eta_min > 120)) {   // far-off effects: listed in the evidence, not tagged
+        role[x.node] = { kind: 'impact', tone: x.eta_min !== null && x.eta_min < 1 ? 'crit' : 'warn',
+          text: x.eta_min === null ? 'At risk' : x.eta_min < 1 ? 'Hit now' : `Hit in ${fmt(x.eta_min)} min` }
+      }
+    }
+    if (p1.drift_detected) role.homogenizer = { kind: 'root', text: 'Root cause', tone: 'crit' }
+    if (aSpoof && !s.pasteurizer_a.quarantined) role.pasteurizer_a = { kind: 'root', text: 'Hacked PLC', tone: 'crit' }
+    if (chillerSpoofed(frame)) role.silo = { kind: 'root', text: 'Sensor faked', tone: 'crit' }
+    for (const [pump, unit] of [['homogenizer_pump_1', 'homogenizer'], ['pasteurizer_a_pump', 'pasteurizer_a']]) {
+      const t = openTicket(tickets, pump)
+      if (t && t.status !== 'DISPATCHED' && !role[unit]) role[unit] = { kind: 'root', text: null, tone: t.status === 'FAILED' || t.priority === 'CRITICAL' ? 'crit' : 'warn' }
+    }
+
     const view = Object.fromEntries(Object.keys(TYPE).map((id) => [id, {
-      id, s: s[id], status: units[id].status, reason: units[id].reason, badge: badge[id],
+      id, s: s[id], status: units[id].status, reason: units[id].reason, badge: badge[id], role: role[id],
       quarantined: id.startsWith('pasteurizer') && s[id].quarantined,
       spoof: id === 'pasteurizer_a' && aSpoof, physical: chk.pasteurizer_a.implied_flow,
       tStarve: frame.engine.pillar1.t_starve_min,

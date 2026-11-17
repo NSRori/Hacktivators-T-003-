@@ -119,14 +119,14 @@ export const LABEL = {
 }
 export const UNITS = ['silo', 'pasteurizer_a', 'pasteurizer_b', 'homogenizer', 'surge_tank', 'filler', 'packaging']
 
-/** Engine status → light-theme classes. Every status also gets an icon + a word (never colour alone). */
+/** Engine status → theme classes. Every status also gets an icon + a word (never colour alone). */
 export const TONE = {
-  OK: { word: 'Normal', text: 'text-ok', soft: 'bg-ok-2', fill: 'bg-ok', outline: 'outline-line', hex: '#2E7D5B' },
-  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#0B6FA8' },
-  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#0B6FA8' },
-  WARN: { word: 'Warning', text: 'text-warn-ink', soft: 'bg-warn-2', fill: 'bg-warn', outline: 'outline-warn', hex: '#C98A00' },
-  CRITICAL: { word: 'Critical', text: 'text-crit', soft: 'bg-crit-2', fill: 'bg-crit', outline: 'outline-crit', hex: '#B83A2E' },
-  QUARANTINED: { word: 'Isolated', text: 'text-iso', soft: 'bg-iso-2', fill: 'bg-iso', outline: 'outline-iso', hex: '#6B3FA0' },
+  OK: { word: 'Normal', text: 'text-ok', soft: 'bg-ok-2', fill: 'bg-ok', outline: 'outline-line', hex: '#3DB07E' },
+  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#4FB3EA' },
+  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#4FB3EA' },
+  WARN: { word: 'Warning', text: 'text-warn-ink', soft: 'bg-warn-2', fill: 'bg-warn', outline: 'outline-warn', hex: '#E3A41A' },
+  CRITICAL: { word: 'Critical', text: 'text-crit', soft: 'bg-crit-2', fill: 'bg-crit', outline: 'outline-crit', hex: '#E5604F' },
+  QUARANTINED: { word: 'Isolated', text: 'text-iso', soft: 'bg-iso-2', fill: 'bg-iso', outline: 'outline-iso', hex: '#A07AD9' },
 }
 export const LEGACY = {
   GREEN: { word: 'All green', hex: '#3FAE5A' },
@@ -185,7 +185,11 @@ export function caption(f, mode) {
       return 'The homogenizer valve has started to clog. Its pressure is still well inside the legacy limits.'
     case 'pump_wear': {
       const t = tk('homogenizer_pump_1') || tk('pasteurizer_a_pump')
-      if (!t) return 'A pump seal has started to wear. The vibration change is still too small for any fixed alarm.'
+      if (!t) {
+        const r = f.engine.pillar2.tickets.find((x) => x.created_tick >= f.scenario_tick && x.status === 'RESOLVED')
+        return r ? `${r.label} was repaired before it broke down: no unplanned stop.`
+          : 'A pump seal has started to wear. The vibration change is still too small for any fixed alarm.'
+      }
       if (t.status === 'FAILED') return `${t.label} has broken down. Send a repair crew to restart it.`
       if (t.status === 'DISPATCHED') return `A technician is on the way to ${t.label}, before it fails.`
       return `${t.label} is predicted to fail in ${fmt(t.rul_min)} min. The legacy SCADA has not noticed anything yet.`

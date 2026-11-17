@@ -4,6 +4,7 @@ import { post, SCENARIOS, TABS, useRoute, useTwin } from './lib/twin'
 import { AppHeader, ScenarioBar, Toast } from './components/Chrome'
 import Backdrop from './components/Backdrop'
 import { WidgetProvider } from './components/widgets'
+import { isMuted, setMuted, useClickFeel, useFeel } from './lib/feel'
 import Home from './pages/Home'
 import Twin from './pages/Twin'
 import { CyberPage, LogPage, MaintPage, SyncPage } from './pages/Pillars'
@@ -14,6 +15,8 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [presenter, setPresenter] = useState(false)
   const timer = useRef(null)
+  useFeel(frame)
+  useClickFeel()
 
   const notify = useCallback((msg, ok = true) => {
     setToast({ msg, ok, id: Date.now() })
@@ -41,6 +44,7 @@ export default function App() {
       else if (k === 'a' && mode) call('/auto-sync', { enabled: !mode.auto_sync })
       else if (k === 'i' && mode) call('/auto-isolate', { enabled: !mode.auto_isolate })
       else if (k === 'p') setPresenter((p) => !p)
+      else if (k === 'm') setMuted(!isMuted())
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -50,6 +54,7 @@ export default function App() {
   return (
     <WidgetProvider scope={scope}>
       <Backdrop />
+      <div id="fx" className="fx" aria-hidden="true" />
       {scope === 'home' ? (
         <><Home frame={frame} connected={connected} go={go} run={run} /><Toast toast={toast} /></>
       ) : (

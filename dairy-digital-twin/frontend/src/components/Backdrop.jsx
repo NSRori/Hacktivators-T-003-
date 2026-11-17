@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-/* The page background: a slow sky-blue / periwinkle / white gradient that notices the visitor.
+/* The page background: dark espresso with slow cerulean and caramel light fields that notice the visitor.
    Moving the mouse lights up the dot grid under the cursor and leans the colour fields towards it;
    clicking empty background sends out a ripple. All of it sits behind the content (z-index -1),
    updates CSS variables from one requestAnimationFrame loop that sleeps when the mouse is still,
@@ -36,9 +36,24 @@ export default function Backdrop() {
       raf = Math.abs(tx - x) + Math.abs(ty - y) > 0.4 || Math.abs(onT - on) > 0.004 ? requestAnimationFrame(tick) : 0
     }
     const kick = () => { if (!raf) raf = requestAnimationFrame(tick) }
+    // the card under the cursor gets a spotlight and a lit edge that follow the pointer (CSS vars on .panel)
+    let lit = null
+    const light = (e) => {
+      const p = calm ? null : e.target.closest?.('.panel')
+      if (p !== lit) {
+        if (lit) lit.style.setProperty('--lit', '0')
+        lit = p
+        if (lit) lit.style.setProperty('--lit', '1')
+      }
+      if (lit) {
+        const r = lit.getBoundingClientRect()
+        lit.style.setProperty('--sx', `${(e.clientX - r.left).toFixed(0)}px`)
+        lit.style.setProperty('--sy', `${(e.clientY - r.top).toFixed(0)}px`)
+      }
+    }
     // full effect over empty background; dimmed while reading text or using a card
-    const move = (e) => { tx = e.clientX; ty = e.clientY; onT = e.target.closest?.(`${SKIP}, p, h1, h2, h3, li`) ? 0.35 : 1; kick() }
-    const leave = () => { onT = 0; kick() }
+    const move = (e) => { light(e); tx = e.clientX; ty = e.clientY; onT = e.target.closest?.(`${SKIP}, p, h1, h2, h3, li`) ? 0.35 : 1; kick() }
+    const leave = () => { onT = 0; if (lit) { lit.style.setProperty('--lit', '0'); lit = null } kick() }
     const ripple = (e) => {
       if (calm || e.button !== 0 || e.target.closest?.(SKIP)) return
       const r = document.createElement('span')
@@ -68,6 +83,7 @@ export default function Backdrop() {
         <i className="bd-f1" /><i className="bd-f2" /><i className="bd-f3" /><i className="bd-f4" />
       </div>
       <div className="bd-grid" />
+      <div className="bd-scan" />
       <div className="bd-glow" />
       <div className="bd-dots" />
     </div>

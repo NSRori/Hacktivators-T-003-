@@ -1,7 +1,43 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Eye, Maximize2, Minimize2, Minus, OctagonAlert, ShieldAlert, TriangleAlert, Wrench } from 'lucide-react'
-import { TONE } from '../lib/twin'
+import { fmt, fmtInt, TONE } from '../lib/twin'
 import { FocusView, useWidget, useZoomed } from './widgets'
+
+/** Eases a displayed number towards its new value instead of jumping (display only, never fed back). */
+export function useTween(target, ms = 700) {
+  const [v, setV] = useState(target)
+  const cur = useRef(target)
+  useEffect(() => {
+    const ok = typeof target === 'number' && Number.isFinite(target)
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!ok || typeof cur.current !== 'number' || !Number.isFinite(cur.current) || calm) {
+      cur.current = target
+      setV(target)
+      return undefined
+    }
+    const a = cur.current
+    const b = target
+    if (Math.abs(b - a) < 1e-9) return undefined
+    const t0 = performance.now()
+    let raf = 0
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / ms)
+      const x = a + (b - a) * (1 - (1 - k) ** 3)
+      cur.current = x
+      setV(x)
+      if (k < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, ms])
+  return v
+}
+
+/** A number that rolls to its new value. `int` = thousands separators, otherwise `d` decimals. */
+export function Num({ value, d = 0, int = false }) {
+  const v = useTween(value)
+  return <>{int ? fmtInt(v) : fmt(v, d)}</>
+}
 
 export const STATUS_ICON = { OK: CheckCircle2, WATCH: Eye, MAINT: Wrench, WARN: TriangleAlert, CRITICAL: OctagonAlert, QUARANTINED: ShieldAlert }
 
@@ -71,7 +107,7 @@ export function Panel({ wid, title, sub, right, children, className = '', bodyCl
   if (w?.zoomed) {
     return (
       <>
-        <div className={`${className} grid place-items-center rounded-[10px] border-2 border-dashed border-accent-3 bg-surface/60 text-[14px] text-ink-2`}
+        <div className={`${className} grid place-items-center rounded-[12px] border-2 border-dashed border-accent-3 bg-surface/40 text-[14px] text-ink-2`}
           style={{ height: held || 160 }}>
           <span>“{title}” is open in the focus view</span>
         </div>
@@ -102,11 +138,11 @@ export function PageHeader({ eyebrow, title, lede, right }) {
 }
 
 export const BTN = {
-  primary: 'bg-accent text-white hover:bg-[#095A88]',
-  secondary: 'bg-surface text-ink border border-line hover:bg-surface-2',
-  crit: 'bg-crit text-white hover:bg-[#9c2f25]',
-  warn: 'bg-warn text-ink hover:bg-[#b37a00]',
-  iso: 'bg-iso text-white hover:bg-[#59348a]',
+  primary: 'bg-brand-deep text-white hover:bg-[#0A80C2] shadow-[0_8px_22px_-10px_rgb(0_145_211/0.9)]',
+  secondary: 'bg-surface-2 text-ink border border-line hover:bg-[#3A2A1D] hover:border-[#6B513C]',
+  crit: 'bg-crit-deep text-white hover:bg-[#CC4537] shadow-[0_8px_22px_-10px_rgb(229_96_79/0.9)]',
+  warn: 'bg-warn text-[#1B1405] hover:bg-[#F0B22E]',
+  iso: 'bg-iso-deep text-white hover:bg-[#7C4FB8] shadow-[0_8px_22px_-10px_rgb(160_122_217/0.9)]',
   quiet: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
 }
 
