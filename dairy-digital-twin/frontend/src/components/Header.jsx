@@ -1,123 +1,130 @@
 import { useState } from 'react'
-import { Bug, Gauge, Milk, Pause, Play, RotateCcw, ShieldCheck, Thermometer, Unplug, Waves, Wifi, Wrench } from 'lucide-react'
-import { clock, fmt, fmtInt, post } from '../lib/twin'
+import { Bug, Gauge, Milk, Pause, Play, RotateCcw, ShieldHalf, Thermometer, Unplug, Waves, Workflow, Wrench } from 'lucide-react'
+import { clock, post, SCENARIOS } from '../lib/twin'
 
-function Kpi({ label, value, unit, tone = 'text-slate-100', sub }) {
-  return (
-    <div className="min-w-[104px] rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-1.5">
-      <div className="text-[9.5px] uppercase tracking-widest text-slate-500">{label}</div>
-      <div className={`num text-[17px] font-semibold leading-tight ${tone}`}>{value}<span className="ml-1 text-[10px] text-slate-500">{unit}</span></div>
-      {sub && <div className="text-[9.5px] text-slate-500">{sub}</div>}
-    </div>
-  )
-}
+const SPEEDS = [[1.0, '½×'], [0.5, '1×'], [0.25, '2×'], [0.125, '4×']]
 
-export function TopBar({ frame, connected }) {
-  const k = frame?.kpi
-  const ret = k?.retention_pct
+export function TopBar({ frame, mode, connected, notify }) {
+  const call = async (path, body) => {
+    const r = await post(path, body)
+    notify(r.message || (r.ok ? 'done' : 'failed'), r.ok !== false)
+  }
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950/80 px-4 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300"><Milk size={20} /></div>
-        <div>
-          <div className="text-[15px] font-bold text-slate-100">Dairy Digital Twin <span className="font-normal text-slate-400">· Three-Pillar Causal Engine</span></div>
-          <div className="text-[10.5px] text-slate-500">Beyond the Factory Floor · Production Sync · Predictive Maintenance · OT Cyber Defense</div>
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#05080f]/85 backdrop-blur-md">
+      <div className="mx-auto flex max-w-[1920px] items-center gap-4 px-5 py-3">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-lg shadow-sky-500/20">
+            <Milk size={21} />
+          </div>
+          <div>
+            <div className="text-[17px] font-bold tracking-tight text-white">Dairy Digital Twin</div>
+            <div className="text-[11.5px] text-slate-400">Three-Pillar Causal Engine · <span className="text-slate-500">PS 1 · Beyond the Factory Floor</span></div>
+          </div>
         </div>
-      </div>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Kpi label="Plant clock" value={frame ? clock(frame.sim_min) : '--:--'} unit="sim" sub={frame ? `tick ${frame.tick}` : ''} />
-        <Kpi label="Bottling" value={fmt(k?.throughput_lpm)} unit="L/min"
-          tone={ret === undefined ? 'text-slate-100' : ret >= 95 ? 'text-emerald-300' : ret >= 80 ? 'text-amber-300' : 'text-red-300'}
-          sub={`${fmt(ret, 1)} % of 800 (30-min avg)`} />
-        <Kpi label="Since scenario" value={fmt(k?.scenario_retention_pct, 1)} unit="%" sub="throughput retention" />
-        <Kpi label="Bottled" value={fmtInt(k?.bottled_l)} unit="L" />
-        <Kpi label="Milk wasted" value={fmtInt(k?.wasted_l)} unit="L" tone={k?.wasted_l ? 'text-red-300' : 'text-slate-100'} sub="silo overflow" />
-        <Kpi label="Unsafe / at-risk" value={`${fmtInt(k?.unsafe_l)} / ${fmtInt(k?.at_risk_l)}`} unit="L"
-          tone={k?.unsafe_l || k?.at_risk_l ? 'text-red-300' : 'text-slate-100'} sub="under-pasteurized / warm" />
-        <Kpi label="Filler starved" value={fmt(k?.starved_min)} unit="min" tone={k?.starved_min ? 'text-amber-300' : 'text-slate-100'} />
-        <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${connected ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'}`}>
-          {connected ? <Wifi size={13} /> : <Unplug size={13} />}{connected ? 'LIVE' : 'OFFLINE'}
+
+        <div className="mx-auto hidden items-center gap-3 lg:flex">
+          <div className="rounded-xl bg-white/[0.03] px-4 py-1.5 ring-1 ring-white/10">
+            <div className="text-[9.5px] uppercase tracking-[0.18em] text-slate-500">Plant clock</div>
+            <div className="num text-[20px] font-bold leading-tight text-white">T+{frame ? clock(frame.sim_min) : '--:--'}</div>
+          </div>
+          <div className="text-[11px] leading-tight text-slate-500">1 tick = 1 simulated minute<br />engine refresh 2 Hz</div>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-lg ring-1 ring-white/10" title="Simulation speed">
+            <span className="grid place-items-center bg-white/[0.03] px-2 text-slate-500"><Gauge size={14} /></span>
+            {SPEEDS.map(([ts, lab]) => (
+              <button key={lab} onClick={() => call('/speed', { tick_seconds: ts })}
+                className={`num px-2.5 py-1.5 text-[12px] transition ${mode?.tick_seconds === ts ? 'bg-sky-400/20 text-sky-200' : 'bg-white/[0.02] text-slate-400 hover:text-white'}`}>{lab}</button>
+            ))}
+          </div>
+          <button onClick={() => call(mode?.paused ? '/resume' : '/pause')}
+            className="flex items-center gap-1.5 rounded-lg bg-white/[0.03] px-3 py-1.5 text-[12.5px] text-slate-200 ring-1 ring-white/10 hover:bg-white/[0.07]">
+            {mode?.paused ? <Play size={14} /> : <Pause size={14} />}{mode?.paused ? 'Resume' : 'Pause'}
+          </button>
+          <button onClick={() => call('/reset')}
+            className="flex items-center gap-1.5 rounded-lg bg-sky-400/15 px-3 py-1.5 text-[12.5px] font-semibold text-sky-100 ring-1 ring-sky-400/50 hover:bg-sky-400/25">
+            <RotateCcw size={14} />Reset plant
+          </button>
+          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold tracking-wide ${connected
+            ? 'bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/30' : 'bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/40'}`}>
+            {connected ? <span className="live-dot h-2 w-2 rounded-full bg-emerald-400" /> : <Unplug size={13} />}
+            {connected ? (mode?.paused ? 'PAUSED' : 'LIVE') : 'OFFLINE'}
+          </div>
         </div>
       </div>
     </header>
   )
 }
 
-function Toggle({ label, on, onChange, hint }) {
+const ICONS = { drift: Waves, pump_wear: Wrench, cyber_spike: Bug, chiller_spoof: Thermometer }
+const ACCENT = {
+  drift: 'from-amber-400/25 ring-amber-400/60 text-amber-300',
+  pump_wear: 'from-violet-400/25 ring-violet-400/60 text-violet-300',
+  cyber_spike: 'from-rose-500/25 ring-rose-500/60 text-rose-300',
+  chiller_spoof: 'from-fuchsia-500/25 ring-fuchsia-500/60 text-fuchsia-300',
+}
+
+function Switch({ on, onChange, title, sub, icon: Icon }) {
   return (
-    <button onClick={() => onChange(!on)} title={hint}
-      className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition ${on
-        ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200' : 'border-slate-600 bg-slate-800/60 text-slate-300'}`}>
-      <span className={`relative h-4 w-7 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-slate-600'}`}>
-        <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${on ? 'left-3.5' : 'left-0.5'}`} />
+    <button onClick={() => onChange(!on)}
+      className={`flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left ring-1 transition ${on
+        ? 'bg-emerald-400/[0.08] ring-emerald-400/40' : 'bg-white/[0.02] ring-white/10 hover:ring-white/20'}`}>
+      <Icon size={18} className={on ? 'text-emerald-300' : 'text-slate-500'} />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-white">{title}</div>
+        <div className="truncate text-[11px] text-slate-400">{sub}</div>
+      </div>
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${on ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? 'left-6' : 'left-1'}`} />
       </span>
-      {label}: {on ? 'ON' : 'OFF'}
     </button>
   )
 }
 
-const SCN = [
-  { key: 'drift', n: 1, label: 'Silent Homogenizer Drift', icon: Waves, cls: 'hover:border-amber-400/70', hint: 'Valve fouling slowly cuts homogenizer capacity while pressure stays inside the green band' },
-  { key: 'pump_wear', n: 2, label: 'Pump Seal Wear', icon: Wrench, cls: 'hover:border-sky-400/70', hint: 'Gradual seal wear raises vibration until the pump fails' },
-  { key: 'cyber_spike', n: 3, label: 'Pasteurizer_A Cyber Spike', icon: Bug, cls: 'hover:border-red-400/70', hint: 'Rogue PLC write: +40 % flow with spoofed "normal" telemetry' },
-  { key: 'chiller_spoof', n: 4, label: 'Chiller Sensor Spoof', icon: Thermometer, cls: 'hover:border-fuchsia-400/70', hint: 'Compromised workstation freezes the silo temperature reading at 4 °C' },
-]
-const SPEEDS = [[1.0, '0.5×'], [0.5, '1×'], [0.25, '2×'], [0.125, '4×']]
-
-export function ControlBar({ frame, mode, notify }) {
+export function ScenarioDeck({ frame, mode, notify }) {
   const [pump, setPump] = useState('homogenizer_pump_1')
   const call = async (path, body) => {
     const r = await post(path, body)
     notify(r.message || (r.ok ? 'done' : 'failed'), r.ok !== false)
   }
   const active = frame?.scenario
-  const quarantined = frame?.quarantined || []
+  const since = frame && frame.scenario_tick !== null && frame.scenario_tick !== undefined ? frame.tick - frame.scenario_tick : null
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/50 px-4 py-2">
-      <span className="panel-title mr-1">Scenarios</span>
-      {SCN.map((s) => (
-        <div key={s.key} className="flex items-center">
-          <button onClick={() => call(`/scenario/${s.key}${s.key === 'pump_wear' ? `?target=${pump}` : ''}`)} title={s.hint}
-            className={`flex items-center gap-1.5 border border-slate-700 bg-slate-900 px-3 py-1.5 text-[12px] font-medium text-slate-200 transition ${s.cls}
-              ${s.key === 'pump_wear' ? 'rounded-l-lg' : 'rounded-lg'} ${active === s.key ? 'ring-1 ring-sky-400/60' : ''}`}>
-            <span className="num rounded bg-slate-800 px-1 text-[10px] text-slate-400">{s.n}</span>
-            <s.icon size={14} />{s.label}
-          </button>
-          {s.key === 'pump_wear' && (
-            <select value={pump} onChange={(e) => setPump(e.target.value)}
-              className="rounded-r-lg border border-l-0 border-slate-700 bg-slate-900 px-1.5 py-[7px] text-[11px] text-slate-300 outline-none">
-              <option value="homogenizer_pump_1">Homogenizer Pump #1</option>
-              <option value="pasteurizer_a_pump">Pasteurizer_A Feed Pump</option>
-            </select>
-          )}
-        </div>
-      ))}
-      <div className="mx-1 h-6 w-px bg-slate-700" />
-      {mode && <Toggle label="Auto-Sync" on={mode.auto_sync} onChange={(v) => call('/auto-sync', { enabled: v })}
-        hint="Pillar 1 closed-loop control: intake throttling, filler pacing, A/B rebalancing, auto micro-CIP flush" />}
-      {mode && <Toggle label="Auto-Isolate" on={mode.auto_isolate} onChange={(v) => call('/auto-isolate', { enabled: v })}
-        hint="Pillar 3 automatic surgical isolation + firewall blocking" />}
-      {quarantined.length > 0 && (
-        <span className="flex items-center gap-1 rounded-lg bg-fuchsia-500/15 px-2.5 py-1.5 text-[11.5px] font-semibold text-fuchsia-200">
-          <ShieldCheck size={13} />{quarantined.length} cell isolated
-        </span>
-      )}
-      <div className="ml-auto flex items-center gap-2">
-        <div className="flex overflow-hidden rounded-lg border border-slate-700" title="simulation speed">
-          <span className="flex items-center bg-slate-900 px-2 text-slate-500"><Gauge size={13} /></span>
-          {SPEEDS.map(([ts, lab]) => (
-            <button key={lab} onClick={() => call('/speed', { tick_seconds: ts })}
-              className={`px-2 py-1.5 text-[11px] num ${mode?.tick_seconds === ts ? 'bg-sky-500/25 text-sky-200' : 'bg-slate-900 text-slate-400'}`}>{lab}</button>
-          ))}
-        </div>
-        <button onClick={() => call(mode?.paused ? '/resume' : '/pause')}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-[12px] text-slate-200">
-          {mode?.paused ? <Play size={14} /> : <Pause size={14} />}{mode?.paused ? 'Resume' : 'Pause'}
-        </button>
-        <button onClick={() => call('/reset')}
-          className="flex items-center gap-1.5 rounded-lg border border-sky-500/60 bg-sky-500/15 px-3 py-1.5 text-[12px] font-semibold text-sky-200">
-          <RotateCcw size={14} />Reset Plant to Normal
-        </button>
+    <div className="mx-auto grid max-w-[1920px] gap-3 px-5 pt-4 xl:grid-cols-12">
+      <div className="grid gap-3 sm:grid-cols-2 xl:col-span-8 xl:grid-cols-4">
+        {SCENARIOS.map((s) => {
+          const Icon = ICONS[s.key]
+          const on = active === s.key
+          const [grad, ring, text] = ACCENT[s.key].split(' ')
+          return (
+            <div key={s.key} className={`group relative overflow-hidden rounded-2xl ring-1 transition ${on ? `bg-gradient-to-br ${grad} to-transparent ${ring}` : 'bg-white/[0.02] ring-white/10 hover:ring-white/25'}`}>
+              <button onClick={() => call(`/scenario/${s.key}${s.key === 'pump_wear' ? `?target=${pump}` : ''}`)} className="w-full px-4 pb-3 pt-3.5 text-left">
+                <div className="flex items-center gap-2">
+                  <span className={`num grid h-6 w-6 place-items-center rounded-md bg-white/5 text-[12px] font-bold ${on ? text : 'text-slate-400'}`}>{s.n}</span>
+                  <Icon size={17} className={on ? text : 'text-slate-400 group-hover:text-slate-200'} />
+                  {on && <span className={`ml-auto flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider ${text}`}>
+                    <span className="live-dot h-1.5 w-1.5 rounded-full bg-current" />running · <span className="num">T+{since}m</span></span>}
+                </div>
+                <div className="mt-2 text-[14px] font-semibold leading-snug text-white">{s.title}</div>
+                <div className="mt-0.5 text-[11.5px] leading-snug text-slate-400">{s.blurb}</div>
+              </button>
+              {s.key === 'pump_wear' && (
+                <select value={pump} onChange={(e) => setPump(e.target.value)}
+                  className="mx-4 mb-3 -mt-1 w-[calc(100%-2rem)] rounded-md bg-[#0b1322] px-2 py-1 text-[11.5px] text-slate-300 ring-1 ring-white/10 outline-none">
+                  <option value="homogenizer_pump_1">on Homogenizer Pump #1</option>
+                  <option value="pasteurizer_a_pump">on Pasteurizer A Feed Pump</option>
+                </select>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex flex-col gap-2 xl:col-span-4 sm:flex-row xl:flex-col">
+        <Switch on={!!mode?.auto_sync} onChange={(v) => call('/auto-sync', { enabled: v })} icon={Workflow}
+          title={`Auto-Sync ${mode?.auto_sync ? 'ON' : 'OFF'}`} sub="Pillar 1 · intake throttle, filler pacing, A/B rebalance, auto CIP flush" />
+        <Switch on={!!mode?.auto_isolate} onChange={(v) => call('/auto-isolate', { enabled: v })} icon={ShieldHalf}
+          title={`Auto-Isolate ${mode?.auto_isolate ? 'ON' : 'OFF'}`} sub="Pillar 3 · surgical cell isolation + firewall block" />
       </div>
     </div>
   )

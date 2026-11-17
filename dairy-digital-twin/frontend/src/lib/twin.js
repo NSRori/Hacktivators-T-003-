@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 const MAX_POINTS = 240
-const MAX_PACKETS = 60
+const MAX_PACKETS = 80
 
 // Same shape as backend main.chart_point()
 export function chartPoint(f) {
@@ -69,14 +69,18 @@ export function useTwin() {
 }
 
 export async function post(path, body) {
-  const r = await fetch(`/api${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  const data = await r.json().catch(() => ({}))
-  if (!r.ok) return { ok: false, message: data.detail || `HTTP ${r.status}` }
-  return data
+  try {
+    const r = await fetch(`/api${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) return { ok: false, message: data.detail || `HTTP ${r.status}` }
+    return data
+  } catch {
+    return { ok: false, message: 'Backend unreachable - is uvicorn running on :8000?' }
+  }
 }
 
 export const fmt = (v, d = 0) => (v === null || v === undefined || Number.isNaN(v) ? '—' : Number(v).toFixed(d))
@@ -87,27 +91,35 @@ export const clock = (min) => {
 }
 
 export const LABEL = {
-  silo: 'Raw Chilling Silo', pasteurizer_a: 'Pasteurizer_A', pasteurizer_b: 'Pasteurizer_B',
+  silo: 'Raw Chilling Silo', pasteurizer_a: 'Pasteurizer A', pasteurizer_b: 'Pasteurizer B',
   homogenizer: 'Homogenizer', surge_tank: 'Surge Tank', filler: 'Aseptic Filler',
   packaging: 'Cold-Chain Packaging', chiller: 'Silo Chiller', network: 'OT Network',
 }
+export const SHORT = {
+  silo: 'SILO', pasteurizer_a: 'PAS-A', pasteurizer_b: 'PAS-B', homogenizer: 'HOMOG',
+  surge_tank: 'SURGE', filler: 'FILL', packaging: 'PACK',
+}
 export const UNITS = ['silo', 'pasteurizer_a', 'pasteurizer_b', 'homogenizer', 'surge_tank', 'filler', 'packaging']
 
-export const ENGINE_STYLE = {
-  OK: { dot: 'bg-emerald-400', text: 'text-emerald-300', ring: 'border-emerald-500/40', pill: 'bg-emerald-500/15 text-emerald-300' },
-  WATCH: { dot: 'bg-sky-400', text: 'text-sky-300', ring: 'border-sky-500/60', pill: 'bg-sky-500/15 text-sky-300' },
-  MAINT: { dot: 'bg-sky-400', text: 'text-sky-300', ring: 'border-sky-400/80', pill: 'bg-sky-500/15 text-sky-300' },
-  WARN: { dot: 'bg-amber-400', text: 'text-amber-300', ring: 'border-amber-400/80', pill: 'bg-amber-500/15 text-amber-300' },
-  CRITICAL: { dot: 'bg-red-500', text: 'text-red-300', ring: 'border-red-500', pill: 'bg-red-500/20 text-red-300' },
-  QUARANTINED: { dot: 'bg-fuchsia-500', text: 'text-fuchsia-300', ring: 'border-fuchsia-500', pill: 'bg-fuchsia-500/20 text-fuchsia-300' },
+/** Engine status palette (hex for SVG, classes for HTML). */
+export const TONE = {
+  OK: { hex: '#34d399', text: 'text-emerald-300', soft: 'bg-emerald-400/10', ring: 'ring-emerald-400/25', word: 'Normal' },
+  WATCH: { hex: '#38bdf8', text: 'text-sky-300', soft: 'bg-sky-400/10', ring: 'ring-sky-400/40', word: 'Watch' },
+  MAINT: { hex: '#38bdf8', text: 'text-sky-300', soft: 'bg-sky-400/10', ring: 'ring-sky-400/50', word: 'Maintenance' },
+  WARN: { hex: '#fbbf24', text: 'text-amber-300', soft: 'bg-amber-400/10', ring: 'ring-amber-400/60', word: 'Warning' },
+  CRITICAL: { hex: '#fb4469', text: 'text-rose-300', soft: 'bg-rose-500/15', ring: 'ring-rose-500/80', word: 'Critical' },
+  QUARANTINED: { hex: '#d946ef', text: 'text-fuchsia-300', soft: 'bg-fuchsia-500/15', ring: 'ring-fuchsia-500/80', word: 'Quarantined' },
 }
-export const LEGACY_STYLE = {
-  GREEN: { dot: 'bg-emerald-400', text: 'text-emerald-300' },
-  AMBER: { dot: 'bg-amber-400', text: 'text-amber-300' },
-  RED: { dot: 'bg-red-500', text: 'text-red-300' },
+export const LEGACY_HEX = { GREEN: '#22e36b', AMBER: '#ffb020', RED: '#ff3b3b' }
+export const SEVERITY = {
+  CRITICAL: { cls: 'border-rose-500/50 bg-rose-500/[0.07]', text: 'text-rose-300' },
+  HIGH: { cls: 'border-amber-500/50 bg-amber-500/[0.07]', text: 'text-amber-300' },
+  MEDIUM: { cls: 'border-sky-500/40 bg-sky-500/[0.06]', text: 'text-sky-300' },
 }
-export const SEVERITY_STYLE = {
-  CRITICAL: 'border-red-500/60 bg-red-500/10 text-red-300',
-  HIGH: 'border-amber-500/60 bg-amber-500/10 text-amber-300',
-  MEDIUM: 'border-sky-500/50 bg-sky-500/10 text-sky-300',
-}
+
+export const SCENARIOS = [
+  { key: 'drift', n: 1, title: 'Silent Homogenizer Drift', blurb: 'Valve fouling cuts capacity while pressure stays "green"', tab: 'sync', toggle: 'Auto-Sync' },
+  { key: 'pump_wear', n: 2, title: 'Pump Seal Wear', blurb: 'Vibration creeps up until the seal fails', tab: 'maint', toggle: 'Dispatch' },
+  { key: 'cyber_spike', n: 3, title: 'Pasteurizer A Cyber Spike', blurb: 'Rogue PLC write: +40 % flow, spoofed "normal" readings', tab: 'soc', toggle: 'Auto-Isolate' },
+  { key: 'chiller_spoof', n: 4, title: 'Chiller Sensor Spoof', blurb: 'Silo reading frozen at 4 °C while milk warms', tab: 'soc', toggle: 'Auto-Isolate' },
+]

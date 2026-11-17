@@ -57,8 +57,10 @@ dashboard at http://localhost:8000.
 | `backend/engine.py` | Pod 1 — M1 physics, M2 injectors | Tick-based plant physics (L/min, °C, PSI, mm/s), volume balances with back-pressure, the 4 fault/attack injectors, Modbus/OPC-UA packet generator, spoofable PLC telemetry |
 | `backend/intelligence.py` | Pod 2 — M3 sync/isolation, M4 ML/OT | Legacy SCADA thresholds, IsolationForest + RUL, NetworkX dependency graph and cascade ETA, Auto-Sync controller, packet rules, spoof cross-checks, surgical isolation |
 | `backend/main.py` | Pod 2 — M3 API hub | FastAPI, `/ws` broadcaster at 2 Hz, REST controls |
-| `frontend/src/components/Topology.jsx` | Pod 3 — M5 | React Flow dairy line, animated flow edges, RUL / CIP badges, quarantine shield |
-| `frontend/src/components/SplitView.jsx`, `Charts.jsx`, `Pillars.jsx`, `Feeds.jsx` | Pod 3 — M6 | Legacy-vs-engine split view, Recharts, maintenance / SOC / packet / event feeds |
+| `frontend/src/components/PlantFloor.jsx` | Pod 3 — M5 | React Flow U-shaped plant floor: fill-level tanks, pressure gauge, piped flow edges, RUL / CIP badges, quarantine shield |
+| `frontend/src/components/Header.jsx` | Pod 3 — M5 | Top bar (clock, speed, pause, reset) + scenario deck + Auto-Sync / Auto-Isolate switches |
+| `frontend/src/components/Monitors.jsx` | Pod 3 — M6 | Retro legacy SCADA screen vs Three-Pillar Engine, detection head start, live incident timeline |
+| `frontend/src/components/KpiStrip.jsx`, `Insights.jsx`, `Charts.jsx` | Pod 3 — M6 | KPI tiles + per-pillar tabs (auto-switch on scenario): charts, RUL cards, dispatch tickets, SOC feed, packet monitor, event log |
 | `backend/tests/run_scenarios.py` | M6 QA | Headless pass/fail check of every scenario |
 
 ## REST / WebSocket contract
