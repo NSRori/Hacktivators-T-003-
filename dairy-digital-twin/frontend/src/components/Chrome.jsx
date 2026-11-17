@@ -70,7 +70,7 @@ function ControlsMenu({ mode, call, presenter, setPresenter }) {
 export function AppHeader({ route, go, frame, mode, connected, call, presenter, setPresenter }) {
   const state = !connected ? ['Offline', 'bg-crit'] : mode?.paused ? ['Paused', 'bg-warn'] : ['Live', 'bg-ok']
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-[#150D08]/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-line bg-[#000000]/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1680px] items-stretch gap-6 px-6">
         <button onClick={() => go('home')} className="flex items-center gap-2.5" title="Back to the homepage">
           <LogoMark />
@@ -119,7 +119,7 @@ export function ScenarioBar({ frame, mode, call }) {
   const active = frame?.scenario
   const since = frame && frame.scenario_tick !== null && frame.scenario_tick !== undefined ? frame.tick - frame.scenario_tick : null
   return (
-    <div className="border-b border-line bg-[#1A110B]/70 backdrop-blur-sm">
+    <div className="border-b border-line bg-[#0E0E0F]/70 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2 px-6 py-2.5">
         <span className="mr-1 text-[14px] font-semibold text-ink">Scenarios</span>
         {SCENARIOS.map((s) => {

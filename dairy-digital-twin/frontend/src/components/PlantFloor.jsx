@@ -10,8 +10,8 @@ import { useZoomed } from './widgets'
 const W = 252
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const CALM = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-const C = { line: '#4D3828', line2: '#36271B', steel: '#8A7462', ink: '#F4EDE5', ink2: '#CDBBA8', accent: '#4FB3EA', flow: '#1AA3E6', milk: '#CFE6F6',
-  shell: '#1A110B', ok: '#3DB07E', okTint: '#24503A', warn: '#E3A41A', crit: '#E5604F', iso: '#A07AD9' }
+const C = { line: '#2E2E31', line2: '#1E1E20', steel: '#7F93A6', ink: '#F2F4F6', ink2: '#B5BCC4', accent: '#4FB3EA', flow: '#1AA3E6', milk: '#CFE6F6',
+  shell: '#0E0E0F', ok: '#3DB07E', okTint: '#24503A', warn: '#E3A41A', crit: '#E5604F', iso: '#A07AD9' }
 
 /* ------------------------------------------------------------------ equipment drawings */
 function Vessel({ level, target = 50 }) {
@@ -348,7 +348,7 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
   }, [])
   useEffect(() => () => setHover(null), [setHover])   // leaving the focus view: no hover card left hanging
   return (
-    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[11px] bg-[#150E09]">
+    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[11px] bg-[#050505]">
       <NodeData.Provider value={view}>
         <Ui.Provider value={ui}>
           <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
@@ -363,7 +363,7 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
             zoomOnScroll={zoomed} panOnDrag={zoomed} zoomOnDoubleClick={zoomed} zoomOnPinch={zoomed} preventScrolling={zoomed}
             minZoom={0.3} maxZoom={2.5} style={{ background: 'transparent' }}>
-            <Background color="#3B2B1F" bgColor="#150E09" gap={22} size={1.2} />
+            <Background color="#262628" bgColor="#050505" gap={22} size={1.2} />
             {zoomed && <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT} />}
           </ReactFlow>
         </Ui.Provider>

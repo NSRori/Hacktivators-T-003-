@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-/* The page background: dark espresso with slow cerulean and caramel light fields that notice the visitor.
+/* The page background: pure black with slow cerulean and periwinkle light fields that notice the visitor.
    Moving the mouse lights up the dot grid under the cursor and leans the colour fields towards it;
    clicking empty background sends out a ripple. All of it sits behind the content (z-index -1),
    updates CSS variables from one requestAnimationFrame loop that sleeps when the mouse is still,

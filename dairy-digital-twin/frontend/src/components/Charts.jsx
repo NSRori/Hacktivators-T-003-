@@ -3,15 +3,15 @@ import { Area, AreaChart, CartesianGrid, ComposedChart, Line, LineChart, Referen
 import { Panel } from './ui'
 import { useZoomed } from './widgets'
 
-const INK = '#F4EDE5'
-const INK2 = '#CDBBA8'
-const LINE = '#36271B'
+const INK = '#F2F4F6'
+const INK2 = '#B5BCC4'
+const LINE = '#1E1E20'
 const ACCENT = '#4FB3EA'
-const MARK = { ink: '#CDBBA8', accent: '#4FB3EA', legacy: '#AEB8C0', warn: '#F0BC4E', iso: '#A07AD9' }
+const MARK = { ink: '#B5BCC4', accent: '#4FB3EA', legacy: '#AEB8C0', warn: '#F0BC4E', iso: '#A07AD9' }
 
 const axis = { stroke: INK2, fontSize: 12.5, tickLine: false, axisLine: { stroke: LINE } }
 const tip = (
-  <Tooltip contentStyle={{ background: '#21160F', border: '1px solid #4A3627', boxShadow: '0 14px 30px -12px rgba(0,0,0,.8)', borderRadius: 6, fontSize: 13, color: INK }}
+  <Tooltip contentStyle={{ background: '#0D0D0E', border: '1px solid #2B2B2D', boxShadow: '0 14px 30px -12px rgba(0,0,0,.8)', borderRadius: 6, fontSize: 13, color: INK }}
     labelFormatter={(t) => `minute ${t}`} isAnimationActive={false} />
 )
 const margin = { top: 22, right: 12, left: -8, bottom: 0 }
