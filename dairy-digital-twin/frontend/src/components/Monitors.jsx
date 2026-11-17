@@ -125,7 +125,7 @@ export function Timeline({ frame }) {
     <div className="card flex min-h-0 flex-1 flex-col p-4">
       <div className="flex items-center justify-between">
         <div className="label">Incident timeline</div>
-        {scn && <div className="text-[11.5px] text-slate-400">{scn.title} · <span className="num">T+{frame.tick - st}m</span></div>}
+        {scn && <div className="text-[11.5px] text-slate-400">{scn.long} · <span className="num">T+{frame.tick - st}m</span></div>}
       </div>
       {!scn ? (
         <div className="mt-3 flex flex-1 flex-col justify-center gap-2 text-[13px] text-slate-400">

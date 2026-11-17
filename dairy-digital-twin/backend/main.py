@@ -171,6 +171,14 @@ async def release(unit: str):
     return await done(ok, f"{unit} released" if ok else f"{unit} is not isolated")
 
 
+@app.post("/api/chiller/failover")
+async def chiller_failover():
+    ok = hub.plant.engage_chiller_failover()
+    if ok:
+        hub.brain._log("crit", "pillar3", "MANUAL RESPONSE: operator switched silo to backup chiller + redundant sensor")
+    return await done(ok, "backup chiller engaged" if ok else "no chiller incident to respond to")
+
+
 @app.post("/api/maintenance/{ticket_id}/dispatch")
 async def dispatch(ticket_id: str):
     ok = hub.brain.dispatch(ticket_id)

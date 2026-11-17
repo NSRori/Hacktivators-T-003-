@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react'
-import { Background, BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, Position, ReactFlow } from '@xyflow/react'
-import { Container, Droplets, Flame, Package, ShieldAlert, ShieldCheck, Snowflake, Sparkles, Truck, Waves, Wrench } from 'lucide-react'
-import { fmt, fmtInt, LABEL, post, TONE } from '../lib/twin'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Background, BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, NodeToolbar, Position, ReactFlow } from '@xyflow/react'
+import { CheckCircle2, Container, Droplets, Flame, MousePointerClick, Package, ShieldAlert, Snowflake, Sparkles, Truck, Waves, Wrench, X } from 'lucide-react'
+import { fmt, fmtInt, LABEL, LEGACY_HEX, post, TONE, UNIT_INFO } from '../lib/twin'
 
 const W = 272
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
@@ -88,7 +88,7 @@ function Shell({ data, children, handles }) {
   const t = TONE[data.status] || TONE.OK
   const Icon = ICON[data.id]
   return (
-    <div className={`relative rounded-2xl bg-[#0b1322] px-3.5 pb-3 pt-3 ring-1 ${t.ring} ${data.status === 'CRITICAL' ? 'pulse-crit' : ''}`}
+    <div className={`unit-card relative rounded-2xl bg-[#0b1322] px-3.5 pb-3 pt-3 ring-1 ${t.ring} ${data.status === 'CRITICAL' ? 'pulse-crit' : ''}`}
       style={{ width: W, boxShadow: data.status === 'OK' ? '0 10px 30px -18px #000' : `0 0 28px -10px ${t.hex}` }}>
       {handles}
       <div className="flex items-center gap-2">
@@ -166,7 +166,7 @@ function PasteurizerNode({ data }) {
       </div>
       {data.spoof && (
         <div className="mt-1.5 rounded-md bg-rose-500/15 px-2 py-1 text-[11px] text-rose-200">
-          Physical flow <b className="num">{fmt(data.physical)}</b> L/min from drive current - PLC is lying
+          Motor current says <b className="num">{fmt(data.physical)}</b> L/min, so the PLC reading is fake
         </div>
       )}
       <div className="mt-2"><TempBar t={s.temp_c} active={flowing} /></div>
@@ -232,12 +232,59 @@ function PackagingNode({ data }) {
 
 function Terminal({ data }) {
   return (
-    <div className="flex w-[180px] items-center gap-2.5 rounded-full border border-dashed border-slate-600/70 bg-[#0a111e] px-3 py-2">
+    <div className="unit-card flex w-[190px] items-center gap-2.5 rounded-full border border-dashed border-slate-600/70 bg-[#0a111e] px-3 py-2">
       {data.out ? <Handle type="source" position={Position.Right} id="r" /> : <Handle type="target" position={Position.Right} id="r" />}
       <Truck size={16} className={data.out ? 'text-sky-300' : 'text-slate-400'} />
       <div>
         <div className="text-[11.5px] font-semibold text-slate-200">{data.title}</div>
         <div className="num text-[10.5px] text-slate-500">{data.sub}</div>
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ hover / pinned info card */
+const TONE_BTN = {
+  sky: 'bg-sky-400 text-slate-950 hover:bg-sky-300',
+  rose: 'bg-rose-500 text-white hover:bg-rose-400',
+  fuchsia: 'bg-fuchsia-500 text-white hover:bg-fuchsia-400',
+  amber: 'bg-amber-400 text-slate-950 hover:bg-amber-300',
+  ghost: 'bg-white/5 text-slate-200 ring-1 ring-white/15 hover:bg-white/10',
+}
+
+function InfoCard({ id, data, pinned, actions, onAct, onClose }) {
+  const info = UNIT_INFO[id]
+  const t = data.status ? TONE[data.status] : null
+  return (
+    <div className="nodrag nopan w-[320px] rounded-2xl bg-[#0a1220] p-4 text-left shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)] ring-1 ring-white/15"
+      onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-start gap-2">
+        <div>
+          <div className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-sky-300/80">{info.step}</div>
+          <div className="text-[17px] font-bold leading-tight text-white">{info.name}</div>
+        </div>
+        {t && <span className={`ml-auto mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${t.soft} ${t.text}`}>{t.word}</span>}
+        {pinned && (
+          <button onClick={onClose} className={`${t ? '' : 'ml-auto'} grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-white/10 hover:text-white`} aria-label="Close">
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-[13px] leading-relaxed text-slate-300">{info.what}</p>
+      <div className="mt-2.5 rounded-lg bg-white/[0.04] px-2.5 py-2 text-[12px] leading-snug text-slate-400">
+        <span className="font-semibold text-slate-200">What the engine watches: </span>{info.watch}
+      </div>
+      {t && data.status !== 'OK' && <div className={`mt-2.5 text-[12.5px] font-medium ${t.text}`}>● Now: {data.reason}</div>}
+      {t && data.status === 'OK' && <div className="mt-2.5 text-[12.5px] text-emerald-300">● Now: working normally</div>}
+      {pinned && actions.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {actions.map((a) => (
+            <button key={a.label} onClick={() => onAct(a)} className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${TONE_BTN[a.tone]}`}>{a.label}</button>
+          ))}
+        </div>
+      )}
+      <div className="mt-2.5 text-[11px] text-slate-500">
+        {pinned ? 'Click anywhere on the floor to close' : `Click the unit to pin this card${actions.length ? ' and take action' : ''}`}
       </div>
     </div>
   )
@@ -270,61 +317,112 @@ function Pipe(props) {
   )
 }
 
+/* ------------------------------------------------------------------ wiring */
 /* Live values reach the nodes through context, so the node objects handed to React Flow
    never change. React Flow drops a node's measured size whenever its object is replaced,
    and an unmeasured node is hidden - re-creating nodes every tick made them blink out. */
 const NodeData = createContext({})
+const Ui = createContext({ hover: null, pinned: null })
+const TIP_POS = {
+  intake: Position.Right, silo: Position.Right, pasteurizer_a: Position.Right, pasteurizer_b: Position.Right,
+  homogenizer: Position.Left, surge_tank: Position.Left, filler: Position.Top, packaging: Position.Right, dispatch: Position.Right,
+}
 const live = (C) => function LiveNode({ id }) {
   const data = useContext(NodeData)[id]
-  return data ? <C data={data} /> : null
+  const ui = useContext(Ui)
+  if (!data) return null
+  return (
+    <>
+      <NodeToolbar isVisible={ui.hover === id || ui.pinned === id} position={TIP_POS[id]} offset={16}>
+        <InfoCard id={id} data={data} pinned={ui.pinned === id} actions={ui.actionsFor(id)} onAct={ui.act} onClose={() => ui.setPinned(null)} />
+      </NodeToolbar>
+      <C data={data} />
+    </>
+  )
 }
 const nodeTypes = { tank: live(TankNode), past: live(PasteurizerNode), homog: live(HomogNode), filler: live(FillerNode),
   pack: live(PackagingNode), term: live(Terminal) }
 const edgeTypes = { pipe: Pipe }
 
 const POS = {
-  intake: { x: -250, y: 140 }, silo: { x: 0, y: 84 },
-  pasteurizer_a: { x: 360, y: 0 }, pasteurizer_b: { x: 360, y: 232 },
-  homogenizer: { x: 720, y: 96 }, surge_tank: { x: 720, y: 440 },
-  filler: { x: 360, y: 452 }, packaging: { x: 0, y: 458 }, dispatch: { x: -250, y: 488 },
+  intake: { x: -300, y: 150 }, silo: { x: 0, y: 90 },
+  pasteurizer_a: { x: 420, y: 0 }, pasteurizer_b: { x: 420, y: 240 },
+  homogenizer: { x: 840, y: 100 }, surge_tank: { x: 840, y: 450 },
+  filler: { x: 420, y: 462 }, packaging: { x: 0, y: 468 }, dispatch: { x: -300, y: 498 },
 }
 const TYPE = { silo: 'tank', surge_tank: 'tank', pasteurizer_a: 'past', pasteurizer_b: 'past', homogenizer: 'homog', filler: 'filler', packaging: 'pack' }
 const NODES = [...Object.keys(TYPE).map((id) => ({ id, type: TYPE[id], position: POS[id], draggable: false })),
   { id: 'intake', type: 'term', position: POS.intake, draggable: false },
   { id: 'dispatch', type: 'term', position: POS.dispatch, draggable: false }]
-
-const FIT = { padding: { top: 0.06, bottom: 0.1, left: 0.03, right: 0.03 } }
+const FIT = { padding: { top: 0.06, bottom: 0.08, left: 0.03, right: 0.03 } }
 
 const openTicket = (tickets, unit) => tickets.find((t) => t.unit === unit && ['OPEN', 'DISPATCHED', 'FAILED'].includes(t.status))
+const chillerSpoofed = (f) => f.engine.pillar3.checks.chiller.diff_c > 1.5 && !f.chiller_failover
+const underAttack = (f, id) => !f.stages[id].quarantined && f.engine.units[id].status === 'CRITICAL'
+  && f.engine.pillar3.alerts.some((a) => a.unit === id && f.tick - a.tick <= 15)
 
-function IsolationControls({ frame, notify }) {
-  const call = async (path) => {
-    const r = await post(path)
-    notify(r.message, r.ok)
+/** Buttons offered on a pinned unit card. */
+function actionsFor(id, f) {
+  const acts = []
+  const tickets = f.engine.pillar2.tickets
+  if (id === 'pasteurizer_a' || id === 'pasteurizer_b') {
+    acts.push(f.stages[id].quarantined
+      ? { label: `Release ${UNIT_INFO[id].name}`, path: `/release/${id}`, tone: 'fuchsia' }
+      : { label: `Isolate ${UNIT_INFO[id].name}`, path: `/isolate/${id}`, tone: underAttack(f, id) ? 'rose' : 'ghost' })
   }
-  const q = frame.quarantined
-  return (
-    <div className="flex gap-1.5">
-      {['pasteurizer_a', 'pasteurizer_b'].map((u) => (q.includes(u)
-        ? <button key={u} onClick={() => call(`/release/${u}`)}
-            className="flex items-center gap-1 rounded-lg bg-fuchsia-500/20 px-2.5 py-1 text-[11.5px] font-semibold text-fuchsia-100 ring-1 ring-fuchsia-500/60 hover:bg-fuchsia-500/30">
-            <ShieldCheck size={13} />Release {LABEL[u]}</button>
-        : <button key={u} onClick={() => call(`/isolate/${u}`)} title="Manual surgical isolation (NetworkX path check)"
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11.5px] text-slate-400 ring-1 ring-white/10 hover:text-fuchsia-200 hover:ring-fuchsia-500/50">
-            <ShieldAlert size={13} />Isolate {LABEL[u].replace('Pasteurizer ', 'Past. ')}</button>))}
-    </div>
-  )
+  const pump = id === 'homogenizer' ? 'homogenizer_pump_1' : id === 'pasteurizer_a' ? 'pasteurizer_a_pump' : null
+  const pt = pump && openTicket(tickets, pump)
+  if (pt && ['OPEN', 'FAILED'].includes(pt.status)) acts.push({ label: 'Dispatch technician', path: `/maintenance/${pt.id}/dispatch`, tone: 'sky' })
+  const ft = id === 'homogenizer' && openTicket(tickets, 'homogenizer')
+  if (ft && ft.status === 'OPEN') acts.push({ label: 'Run cleaning flush', path: `/maintenance/${ft.id}/dispatch`, tone: 'sky' })
+  if (id === 'silo' && chillerSpoofed(f)) acts.push({ label: 'Switch to backup chiller', path: '/chiller/failover', tone: 'rose' })
+  return acts
 }
 
-export default function PlantFloor({ frame, notify }) {
+/** Plain-language "needs attention" list with one-click fixes. */
+function attention(f, mode) {
+  const items = []
+  const tickets = f.engine.pillar2.tickets
+  for (const [pump, label] of [['homogenizer_pump_1', 'Homogenizer pump'], ['pasteurizer_a_pump', 'Pasteurizer A pump']]) {
+    const tk = openTicket(tickets, pump)
+    if (tk?.status === 'OPEN') items.push({ key: pump, tone: tk.priority === 'CRITICAL' ? 'rose' : 'amber', text: `${label} is wearing out, about ${fmt(tk.rul_min)} min before it fails`, act: { label: 'Dispatch technician', path: `/maintenance/${tk.id}/dispatch` } })
+    if (tk?.status === 'FAILED') items.push({ key: pump, tone: 'rose', text: `${label} has broken down`, act: { label: 'Send repair crew', path: `/maintenance/${tk.id}/dispatch` } })
+    if (tk?.status === 'DISPATCHED') items.push({ key: pump, tone: 'sky', text: `Technician on the way to the ${label.toLowerCase()}`, act: null })
+  }
+  if (f.engine.pillar1.drift_detected && !mode?.auto_sync) {
+    items.push({ key: 'sync', tone: 'amber', text: 'Homogenizer is slowly clogging and the line will starve soon', act: { label: 'Turn on Auto-Sync', path: '/auto-sync', body: { enabled: true } } })
+  }
+  if (f.stages.homogenizer.flushing) items.push({ key: 'flush', tone: 'sky', text: 'Homogenizer is self-cleaning (short flush), and the surge tank keeps the filler running', act: null })
+  for (const id of ['pasteurizer_a', 'pasteurizer_b']) {
+    if (f.stages[id].quarantined) items.push({ key: id, tone: 'fuchsia', text: `${UNIT_INFO[id].name} isolated after a cyber attack, its twin carries 100 % of the milk`, act: { label: 'Release', path: `/release/${id}` } })
+    else if (underAttack(f, id)) items.push({ key: id, tone: 'rose', text: `${UNIT_INFO[id].name} is under cyber attack and its readings are fake`, act: { label: `Isolate ${UNIT_INFO[id].name}`, path: `/isolate/${id}` } })
+  }
+  if (chillerSpoofed(f)) items.push({ key: 'chiller', tone: 'rose', text: 'Silo temperature sensor is faked while the milk warms up', act: { label: 'Switch to backup chiller', path: '/chiller/failover' } })
+  return items
+}
+
+const PILL = {
+  rose: 'bg-rose-500/12 text-rose-100 ring-rose-500/40', amber: 'bg-amber-400/10 text-amber-100 ring-amber-400/40',
+  sky: 'bg-sky-400/10 text-sky-100 ring-sky-400/30', fuchsia: 'bg-fuchsia-500/12 text-fuchsia-100 ring-fuchsia-500/40',
+}
+
+/* ------------------------------------------------------------------ component */
+export default function PlantFloor({ frame, mode, notify }) {
   const flow = useRef(null)
   const box = useRef(null)
+  const [hover, setHover] = useState(null)
+  const [pinned, setPinned] = useState(null)
   useEffect(() => {                                    // re-fit the plant whenever the canvas changes size
     if (!box.current) return undefined
     const ro = new ResizeObserver(() => flow.current?.fitView(FIT))
     ro.observe(box.current)
     return () => ro.disconnect()
   }, [])
+
+  const act = useCallback(async (a) => {
+    const r = await post(a.path, a.body)
+    notify(r.message || (r.ok ? 'done' : 'failed'), r.ok !== false)
+  }, [notify])
 
   const { view, edges } = useMemo(() => {
     const s = frame.stages
@@ -337,9 +435,9 @@ export default function PlantFloor({ frame, notify }) {
       if (!t) continue
       const cls = t.status === 'FAILED' ? 'bg-rose-600 text-white' : t.status === 'DISPATCHED' ? 'bg-sky-400 text-slate-950'
         : t.priority === 'CRITICAL' ? 'bg-rose-500 text-white' : 'bg-amber-400 text-slate-950'
-      badges[unit].push({ text: t.status === 'FAILED' ? 'PUMP FAILED' : t.status === 'DISPATCHED' ? 'TECH EN ROUTE' : `RUL ${fmt(t.rul_min)} min`, cls, icon: 'wrench' })
+      badges[unit].push({ text: t.status === 'FAILED' ? 'PUMP FAILED' : t.status === 'DISPATCHED' ? 'TECH EN ROUTE' : `FAILS IN ${fmt(t.rul_min)} MIN`, cls, icon: 'wrench' })
     }
-    if (s.homogenizer.flushing) badges.homogenizer.push({ text: 'CIP FLUSH', cls: 'bg-sky-400 text-slate-950', icon: 'flush' })
+    if (s.homogenizer.flushing) badges.homogenizer.push({ text: 'SELF-CLEANING', cls: 'bg-sky-400 text-slate-950', icon: 'flush' })
     const aSpoof = chk.pasteurizer_a.mismatch_pct > 12
 
     const view = Object.fromEntries(Object.keys(TYPE).map((id) => [id, {
@@ -352,10 +450,10 @@ export default function PlantFloor({ frame, notify }) {
     view.dispatch = { out: false, title: 'Cold-chain dispatch', sub: `${fmt(s.packaging.rate_lpm)} cartons/min` }
 
     const tone = (n) => units[n]?.status
-    const e = (src, sh, dst, th, flow, extra = {}) => {
-      const color = extra.blocked ? '#d946ef' : flow < 1 ? '#334155' : tone(dst) === 'CRITICAL' ? '#fb4469' : tone(dst) === 'WARN' ? '#fbbf24' : '#a5e3ff'
+    const e = (src, sh, dst, th, f, extra = {}) => {
+      const color = extra.blocked ? '#d946ef' : f < 1 ? '#334155' : tone(dst) === 'CRITICAL' ? '#fb4469' : tone(dst) === 'WARN' ? '#fbbf24' : '#a5e3ff'
       return { id: `${src}-${dst}`, source: src, sourceHandle: sh, target: dst, targetHandle: th, type: 'pipe',
-        markerEnd: { type: MarkerType.ArrowClosed, color, width: 15, height: 15, markerUnits: 'userSpaceOnUse' }, data: { flow, tone: tone(dst), ...extra } }
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 15, height: 15, markerUnits: 'userSpaceOnUse' }, data: { flow: f, tone: tone(dst), ...extra } }
     }
     const pa = s.pasteurizer_a
     const pb = s.pasteurizer_b
@@ -374,29 +472,76 @@ export default function PlantFloor({ frame, notify }) {
     return { view, edges }
   }, [frame])
 
+  const ui = useMemo(() => ({ hover, pinned, setPinned, act, actionsFor: (id) => actionsFor(id, frame) }), [hover, pinned, act, frame])
+  const todo = attention(frame, mode)
+  const legacy = frame.legacy.overall
+  const eng = frame.engine.overall
   const cascade = frame.engine.pillar1.cascade
+
   return (
     <div className="card flex h-full flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center gap-3 px-5 pt-4">
+      <div className="flex flex-wrap items-end gap-3 px-5 pt-4">
         <div>
-          <div className="label">Plant floor · live digital twin</div>
-          <div className="text-[12px] text-slate-500">Edge numbers are physical flow in L/min · dashed line in tanks = 50 % target</div>
+          <div className="text-[19px] font-bold tracking-tight text-white">Digital twin · live dairy line</div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-slate-400">
+            <MousePointerClick size={13} className="text-sky-300" />Hover any unit to see what it does · click it to pin details and act
+          </div>
         </div>
-        <div className="ml-auto"><IsolationControls frame={frame} notify={notify} /></div>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-[11.5px] text-slate-400">
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 rounded bg-sky-200" />milk flowing</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 rounded bg-amber-300" />at risk</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 rounded bg-rose-400" />critical</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 rounded bg-fuchsia-500" />isolated</span>
+        </div>
       </div>
+
+      {/* needs-attention bar */}
+      <div className="mt-3 flex min-h-[44px] flex-wrap items-center gap-2 border-y border-white/5 bg-white/[0.015] px-5 py-2">
+        {todo.length === 0 ? (
+          <span className="flex items-center gap-2 text-[13px] text-emerald-300"><CheckCircle2 size={16} />Everything is running smoothly. No action needed.</span>
+        ) : (
+          <>
+            <span className="label mr-1">Needs attention</span>
+            {todo.map((t) => (
+              <span key={t.key} className={`rise flex items-center gap-2 rounded-xl py-1 pl-3 pr-1 text-[12.5px] ring-1 ${PILL[t.tone]}`}>
+                {t.text}
+                {t.act ? <button onClick={() => act(t.act)} className={`rounded-lg px-2.5 py-1 text-[12px] font-semibold ${TONE_BTN[t.tone]}`}>{t.act.label}</button>
+                  : <span className="pr-2" />}
+              </span>
+            ))}
+          </>
+        )}
+      </div>
+
       <div ref={box} className="relative min-h-[460px] flex-1">
+        {/* verdict ribbon: same plant, two monitors */}
+        <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-col gap-1.5">
+          <div className="hmi flex items-center gap-2 px-2.5 py-1 text-[11.5px]">
+            <span className="text-[#7f8f7f]">LEGACY SCADA</span>
+            <span className="hmi-glow font-bold tracking-wider" style={{ color: LEGACY_HEX[legacy] }}>■ {legacy === 'GREEN' ? 'ALL GREEN' : legacy === 'AMBER' ? 'WARNING' : 'ALARM'}</span>
+          </div>
+          <div className={`flex items-center gap-2 rounded-lg px-2.5 py-1 text-[11.5px] ring-1 ${TONE[eng].soft} ${TONE[eng].ring}`}>
+            <span className="text-slate-400">THREE-PILLAR ENGINE</span>
+            <span className={`font-bold tracking-wide ${TONE[eng].text}`}>{eng === 'OK' ? 'BALANCED' : eng}</span>
+          </div>
+        </div>
         <NodeData.Provider value={view}>
-          <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
-            onInit={(inst) => { flow.current = inst }}
-            nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} zoomOnScroll={false} panOnDrag={false}
-            zoomOnDoubleClick={false} zoomOnPinch={false} preventScrolling={false} minZoom={0.3} style={{ background: 'transparent' }}>
-            <Background color="#1a2436" gap={24} size={1.2} />
-          </ReactFlow>
+          <Ui.Provider value={ui}>
+            <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
+              onInit={(inst) => { flow.current = inst }}
+              onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)}
+              onNodeClick={(_, n) => setPinned((p) => (p === n.id ? null : n.id))} onPaneClick={() => setPinned(null)}
+              nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} zoomOnScroll={false} panOnDrag={false}
+              zoomOnDoubleClick={false} zoomOnPinch={false} preventScrolling={false} minZoom={0.3} style={{ background: 'transparent' }}>
+              <Background color="#1a2436" gap={24} size={1.2} />
+            </ReactFlow>
+          </Ui.Provider>
         </NodeData.Provider>
       </div>
-      <div className="scroll-thin flex h-[50px] shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-white/5 px-5 text-[12px]">
-        <span className="label mr-1 shrink-0">Causal cascade</span>
-        {cascade.length === 0 ? <span className="text-slate-500">No propagating disruption - every stage is balanced.</span>
+
+      <div className="scroll-thin flex h-[46px] shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-white/5 px-5 text-[12px]">
+        <span className="label mr-1 shrink-0">Knock-on effects</span>
+        {cascade.length === 0 ? <span className="text-slate-500">None. A problem in one unit would show here, with when it reaches the next units.</span>
           : cascade.map((c) => (
             <span key={c.from + c.node} className="rounded-lg bg-amber-400/10 px-2.5 py-1 text-amber-100 ring-1 ring-amber-400/30">
               {LABEL[c.from]} → <b>{LABEL[c.node]}</b> {c.effect}

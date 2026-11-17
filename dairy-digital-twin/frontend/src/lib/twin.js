@@ -117,9 +117,30 @@ export const SEVERITY = {
   MEDIUM: { cls: 'border-sky-500/40 bg-sky-500/[0.06]', text: 'text-sky-300' },
 }
 
+/** Plain-language unit descriptions for the digital-twin hover cards. */
+export const UNIT_INFO = {
+  intake: { name: 'Raw Milk Tankers', step: 'Supply', what: 'Farm tankers deliver raw milk to the plant. The intake pump decides how fast milk enters the silo.', watch: 'Pillar 1 throttles this pump so the silo never overflows.' },
+  silo: { name: 'Raw Chilling Silo', step: 'Step 1 · Cold storage', what: 'Stores up to 24,000 L of raw milk at 4 °C until it can be processed. Warm milk spoils fast.', watch: 'Level (overflow) and temperature, cross-checked against independent inlet sensors (Pillar 3).' },
+  pasteurizer_a: { name: 'Pasteurizer A', step: 'Step 2 · Heat treatment', what: 'Heats milk to 72 °C and holds it about 15 s to kill harmful bacteria. Runs in parallel with Pasteurizer B; either can carry the whole plant alone.', watch: 'Temperature, pump wear, and whether the PLC flow reading matches the motor current (cyber spoofing).' },
+  pasteurizer_b: { name: 'Pasteurizer B', step: 'Step 2 · Heat treatment', what: 'Twin of Pasteurizer A: same 72 °C / 15 s treatment. If A is isolated, B takes 100 % of the flow with no downtime.', watch: 'Temperature, flow and load share.' },
+  homogenizer: { name: 'Homogenizer', step: 'Step 3 · Texture', what: 'Pushes milk through a tiny valve at about 2,000 PSI to break up fat so the cream never separates. Every litre goes through this one machine.', watch: 'Hidden pressure drift from valve fouling (Pillar 1) and pump vibration / remaining life (Pillar 2).' },
+  surge_tank: { name: 'Surge Tank', step: 'Step 4 · Buffer', what: 'A 6,000 L buffer between processing and filling. It absorbs short slowdowns upstream so the filler never stops.', watch: 'How long until it runs empty (T_starve), and keeping it near 50 %.' },
+  filler: { name: 'Aseptic Filler', step: 'Step 5 · Filling', what: 'Fills sterile 1 L cartons in a germ-free chamber at up to 800 L/min. If the surge tank runs dry, it starves and stops.', watch: 'Fill rate vs demand, and starvation.' },
+  packaging: { name: 'Cold-Chain Packaging', step: 'Step 6 · Dispatch', what: 'Cases the cartons and moves them into a 4 °C cold room, ready for refrigerated trucks.', watch: 'Output rate and cold-room temperature.' },
+  dispatch: { name: 'Cold-Chain Dispatch', step: 'Out', what: 'Refrigerated trucks carry finished cartons to retailers.', watch: 'This is the plant’s real output, so every lost litre shows up here.' },
+}
+
 export const SCENARIOS = [
-  { key: 'drift', n: 1, title: 'Silent Homogenizer Drift', blurb: 'Valve fouling cuts capacity while pressure stays "green"', tab: 'sync', toggle: 'Auto-Sync' },
-  { key: 'pump_wear', n: 2, title: 'Pump Seal Wear', blurb: 'Vibration creeps up until the seal fails', tab: 'maint', toggle: 'Dispatch' },
-  { key: 'cyber_spike', n: 3, title: 'Pasteurizer A Cyber Spike', blurb: 'Rogue PLC write: +40 % flow, spoofed "normal" readings', tab: 'soc', toggle: 'Auto-Isolate' },
-  { key: 'chiller_spoof', n: 4, title: 'Chiller Sensor Spoof', blurb: 'Silo reading frozen at 4 °C while milk warms', tab: 'soc', toggle: 'Auto-Isolate' },
+  { key: 'drift', n: 1, title: 'Hidden slowdown', long: 'Silent Homogenizer Drift', tab: 'sync',
+    blurb: 'The homogenizer valve slowly clogs. Its pressure stays inside the "green" limits, so the old SCADA sees nothing, yet the line starts to starve.',
+    tip: 'Run it with Auto-Sync OFF, then press Reset and run it with Auto-Sync ON.' },
+  { key: 'pump_wear', n: 2, title: 'Pump wearing out', long: 'Pump Seal Wear', tab: 'maint',
+    blurb: 'A pump seal wears gradually. Vibration creeps up until the pump breaks down.',
+    tip: 'Watch the "fails in N min" badge, then dispatch a technician before it hits zero.' },
+  { key: 'cyber_spike', n: 3, title: 'Cyber attack', long: 'Pasteurizer A Cyber Spike', tab: 'soc',
+    blurb: 'A hacker pushes Pasteurizer A to +40 % flow so milk misses 72 °C, and fakes its readings to look normal.',
+    tip: 'With Auto-Isolate ON the engine quarantines A and reroutes everything through B.' },
+  { key: 'chiller_spoof', n: 4, title: 'Fake temperature', long: 'Chiller Sensor Spoof', tab: 'soc',
+    blurb: 'A compromised PC freezes the silo thermometer at 4 °C while the raw milk quietly warms up.',
+    tip: 'Turn Auto-Isolate OFF to watch the engine catch it by cross-checking another sensor.' },
 ]
