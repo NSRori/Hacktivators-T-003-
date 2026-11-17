@@ -47,8 +47,21 @@ dashboard at http://localhost:8000.
 | 3 | **Pasteurizer_A Cyber Spike** | Rogue host `192.168.66.6` scans the PLCs, then writes `pump_speed_sp=140` (+40 % flow, heating loop frozen, under 72 °C). The PLC replays "400 L/min, 72 °C", so legacy stays green. | **Auto-Isolate ON:** surgical isolation. A is quarantined, its IP is blocked and 100 % of flow goes through B with zero downtime. **OFF:** SOC alerts fire and unsafe milk accumulates. |
 | 4 | **Chiller Sensor Spoof** | A compromised Engineering WS freezes the silo temperature reading at 4 °C while the milk warms. | The cross-check against the independent pasteurizer inlet sensors catches it. Auto-Isolate switches to the backup chiller. |
 
-**Reset Plant to Normal** restarts the plant between judge questions. Your toggle settings are kept. The speed buttons
-(0.5×–4×) change how many simulated minutes run per second (1× = 2 ticks/s, 1 tick = 1 simulated minute).
+**Reset** restarts the plant between judge questions. Your switch settings are kept. Speed (½× to 4×), Pause and
+Presenter mode are in the **Controls** menu (1× = 2 ticks/s, 1 tick = 1 simulated minute).
+
+## Using the app
+
+* **Homepage** (`#/home`) explains the problem, the line and the three pillars, and has a three-minute demo guide.
+  Nothing starts until you open the twin.
+* **Tabs:** `Live twin` · `Production sync` (Pillar 1) · `Predictive maintenance` (Pillar 2) · `Cyber defense` (Pillar 3) ·
+  `Event log`. Each pillar has its own page with its charts, numbers and actions.
+* **Live twin:** hover any unit for what it does, what the engine watches and its live status. Click a unit to pin
+  the card and act (isolate, release, dispatch, cleaning flush, backup chiller). The caption strip says in one sentence
+  what is happening and offers the one-click fix.
+* **Keyboard:** `1`-`4` run a scenario, `R` reset, `A` Auto-Sync, `I` Auto-Isolate, `P` presenter mode.
+* **Look:** light "milk and stainless steel" palette (CSS variables in `src/index.css`), IBM Plex Sans. Status colours
+  are used only for status, and always come with an icon and a word. This follows `../UI_REVIEW_AND_REDESIGN_SPEC.md`.
 
 ## Code map (plan roles)
 
@@ -57,10 +70,11 @@ dashboard at http://localhost:8000.
 | `backend/engine.py` | Pod 1 — M1 physics, M2 injectors | Tick-based plant physics (L/min, °C, PSI, mm/s), volume balances with back-pressure, the 4 fault/attack injectors, Modbus/OPC-UA packet generator, spoofable PLC telemetry |
 | `backend/intelligence.py` | Pod 2 — M3 sync/isolation, M4 ML/OT | Legacy SCADA thresholds, IsolationForest + RUL, NetworkX dependency graph and cascade ETA, Auto-Sync controller, packet rules, spoof cross-checks, surgical isolation |
 | `backend/main.py` | Pod 2 — M3 API hub | FastAPI, `/ws` broadcaster at 2 Hz, REST controls |
-| `frontend/src/components/PlantFloor.jsx` | Pod 3 — M5 | React Flow U-shaped plant floor: fill-level tanks, pressure gauge, piped flow edges, RUL / CIP badges, quarantine shield |
-| `frontend/src/components/Header.jsx` | Pod 3 — M5 | Top bar (clock, speed, pause, reset) + scenario deck + Auto-Sync / Auto-Isolate switches |
-| `frontend/src/components/Monitors.jsx` | Pod 3 — M6 | Retro legacy SCADA screen vs Three-Pillar Engine, detection head start, live incident timeline |
-| `frontend/src/components/KpiStrip.jsx`, `Insights.jsx`, `Charts.jsx` | Pod 3 — M6 | KPI tiles + per-pillar tabs (auto-switch on scenario): charts, RUL cards, dispatch tickets, SOC feed, packet monitor, event log |
+| `frontend/src/pages/Home.jsx` | Pod 3 — M6 | Landing page: problem, live schematic, three pillars, the line, demo guide |
+| `frontend/src/pages/Twin.jsx`, `components/PlantFloor.jsx` | Pod 3 — M5 | Presenter view; React Flow plant floor with vessels, gauge, flow pipes, hover / pin info cards and actions |
+| `frontend/src/components/Verdict.jsx` | Pod 3 — M6 | Legacy SCADA vs Three-Pillar Engine, "who noticed first" detection timeline, KPIs, incident story, knock-on effects |
+| `frontend/src/pages/Pillars.jsx`, `components/Charts.jsx` | Pod 3 — M6 | Production sync / Predictive maintenance / Cyber defense / Event log pages; annotated charts, tickets, SOC alerts, packet monitor |
+| `frontend/src/components/Chrome.jsx`, `lib/` | Pod 3 — M5 | Header, tabs, scenario bar, caption strip; WebSocket hook, hash router, action helpers |
 | `backend/tests/run_scenarios.py` | M6 QA | Headless pass/fail check of every scenario |
 
 ## REST / WebSocket contract
@@ -71,7 +85,8 @@ dashboard at http://localhost:8000.
 * `POST /api/scenario/{drift|pump_wear|cyber_spike|chiller_spoof}` (`?target=homogenizer_pump_1|pasteurizer_a_pump`)
 * `POST /api/reset`, `/api/pause`, `/api/resume`, `/api/speed {"tick_seconds":0.5}`
 * `POST /api/auto-sync {"enabled":true}`, `/api/auto-isolate {"enabled":true}`
-* `POST /api/isolate/{unit}`, `/api/release/{unit}`, `/api/maintenance/{ticket_id}/dispatch`
+* `POST /api/isolate/{unit}`, `/api/release/{unit}`, `/api/maintenance/{ticket_id}/dispatch`, `/api/chiller/failover`
+* `engine.pillar3.threat_level` is `NORMAL`, `ELEVATED`, `CRITICAL` or `CONTAINED` (a response is holding the attack off)
 * `GET /api/health`, `/api/state`, `/api/history`
 
 ## Verify

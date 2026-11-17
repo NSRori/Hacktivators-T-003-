@@ -59,11 +59,14 @@ def legacy_scada(tel):
     for u in ("pasteurizer_a", "pasteurizer_b"):
         p = s[u]
         pump = "pasteurizer_a_pump" if u == "pasteurizer_a" else None
-        put(u, [(p["flow_lpm"] < 1, "AMBER", "no flow"),
+        # an isolated cell is a known operator state (valve closed), not a "no flow" alarm
+        put(u, [(p["flow_lpm"] < 1 and not p["quarantined"], "AMBER", "no flow"),
                 (p["flow_lpm"] > 1 and not 70 <= p["temp_c"] <= 75, "RED", "temperature out of 70-75 °C"),
                 (p["flow_lpm"] > 850, "AMBER", "flow above 850 L/min"),
                 (pump is not None and pumps[pump]["vibration_mms"] > 4.5, "AMBER", "pump vibration > 4.5 mm/s"),
                 (pump is not None and pumps[pump]["failed"], "RED", "pump tripped")])
+        if p["quarantined"] and units[u]["status"] == "GREEN":
+            units[u]["reason"] = "offline (valve closed)"
     h = s["homogenizer"]
     put("homogenizer", [(not 1800 <= h["pressure_psi"] <= 2250, "AMBER", "pressure out of 1800-2250 PSI"),
                         (h["pressure_psi"] < 100, "RED", "no pressure"),
@@ -266,6 +269,8 @@ class ThreePillarEngine:
         if (self.consec["chill"] >= 3 and not tel["chiller_failover"]) or any(
                 self.consec[(k, pu)] >= 2 for k in ("over", "spoof") for pu in ("pasteurizer_a", "pasteurizer_b")):
             threat = "CRITICAL"             # attack still physically in progress
+        if threat == "NORMAL" and (tel["blocked_ips"] or tel["quarantined"] or tel["chiller_failover"]):
+            threat = "CONTAINED"            # quiet now, but only because a response is holding
 
         return {
             "legacy": legacy,
