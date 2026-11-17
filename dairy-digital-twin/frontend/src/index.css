@@ -1,19 +1,23 @@
 @import "tailwindcss";
 
-/* "Milk and stainless steel" palette (UI_REVIEW_AND_REDESIGN_SPEC.md §5.1).
-   Status colours encode status only - never decoration. */
+/* Sky / periwinkle / white palette, built from the team's swatch: cerulean #0091D3, sky #84BEE5,
+   periwinkle #8CAAD2, plus white. Cards stay white so text keeps its contrast on the moving background.
+   Status colours encode status only - never decoration (UI_REVIEW_AND_REDESIGN_SPEC.md §5.1). */
 @theme {
-  --color-bg: #F6F3EC;
+  --color-bg: #EAF3FA;
   --color-surface: #FFFFFF;
-  --color-surface-2: #EFEBE1;
-  --color-line: #D9D3C5;
-  --color-line-2: #E7E2D6;
-  --color-ink: #1B2A33;
-  --color-ink-2: #5B6770;
-  --color-ink-3: #8A949B;
-  --color-accent: #2F5D7C;
-  --color-accent-2: #E8EFF4;
-  --color-accent-3: #9DB7CA;
+  --color-surface-2: #F0F5FA;
+  --color-line: #D3DEEA;
+  --color-line-2: #E3EAF2;
+  --color-ink: #152A3B;
+  --color-ink-2: #4B5D6E;
+  --color-ink-3: #8394A4;
+  --color-accent: #0B6FA8;      /* cerulean, darkened until white text on it passes AA */
+  --color-accent-2: #E2F1FA;
+  --color-accent-3: #84BEE5;    /* sky */
+  --color-brand: #0091D3;       /* cerulean (swatch) - graphics only, too light for small text */
+  --color-sky: #84BEE5;
+  --color-peri: #8CAAD2;
   --color-ok: #2E7D5B;
   --color-ok-2: #E3F0E9;
   --color-warn: #C98A00;
@@ -55,7 +59,67 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
   border-radius: 10px;
+  box-shadow: 0 1px 2px rgb(16 42 67 / 0.05), 0 10px 28px -18px rgb(16 42 67 / 0.28);
 }
+
+/* ---------- animated background (components/Backdrop.jsx) ---------- */
+.backdrop {
+  --mx: 50vw; --my: 30vh; --px: 0; --py: 0; --on: 0;
+  position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background: linear-gradient(160deg, #FFFFFF 0%, #EEF6FC 34%, #E3EDF8 68%, #DCE6F3 100%);
+}
+.bd-fields {
+  position: absolute; inset: -8%;
+  transform: translate3d(calc(var(--px) * 46px), calc(var(--py) * 34px), 0);
+  will-change: transform;
+}
+.bd-fields i { position: absolute; display: block; border-radius: 50%; will-change: transform; }
+.bd-f1 { width: 64vmax; height: 64vmax; left: -14vmax; top: -22vmax;
+  background: radial-gradient(closest-side, rgb(132 190 229 / 0.92), rgb(132 190 229 / 0.5) 55%, rgb(132 190 229 / 0)); animation: bd-a 27s ease-in-out infinite alternate; }
+.bd-f2 { width: 60vmax; height: 60vmax; right: -16vmax; top: 6vmax;
+  background: radial-gradient(closest-side, rgb(140 170 210 / 0.9), rgb(140 170 210 / 0.46) 55%, rgb(140 170 210 / 0)); animation: bd-b 33s ease-in-out infinite alternate; }
+.bd-f3 { width: 50vmax; height: 50vmax; left: 26vw; top: 14vh;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0)); animation: bd-c 23s ease-in-out infinite alternate; }
+.bd-f4 { width: 40vmax; height: 40vmax; left: 4vw; bottom: -18vmax;
+  background: radial-gradient(closest-side, rgb(0 145 211 / 0.26), rgb(0 145 211 / 0)); animation: bd-d 39s ease-in-out infinite alternate; }
+@keyframes bd-a { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(16vw, 9vh, 0) scale(1.08); } 100% { transform: translate3d(5vw, 20vh, 0) scale(0.94); } }
+@keyframes bd-b { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(-14vw, 14vh, 0) scale(0.92); } 100% { transform: translate3d(-4vw, -8vh, 0) scale(1.06); } }
+@keyframes bd-c { 0% { transform: translate3d(0, 0, 0) scale(1); } 100% { transform: translate3d(-18vw, 22vh, 0) scale(1.15); } }
+@keyframes bd-d { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(42vw, -16vh, 0) scale(1.2); } }
+
+/* engineering-paper dot grid: faint everywhere, lit up around the cursor */
+.bd-grid, .bd-dots { position: absolute; inset: 0; background-size: 22px 22px; background-position: 11px 11px; }
+.bd-grid { background-image: radial-gradient(rgb(11 111 168 / 0.13) 1.1px, transparent 1.5px); }
+.bd-dots {
+  background-image: radial-gradient(rgb(0 145 211 / 0.85) 1.6px, transparent 2.1px);
+  -webkit-mask-image: radial-gradient(230px circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.45) 40%, transparent 72%);
+  mask-image: radial-gradient(230px circle at var(--mx) var(--my), #000 0%, rgb(0 0 0 / 0.45) 40%, transparent 72%);
+  opacity: var(--on);
+}
+.bd-glow {
+  position: absolute; left: 0; top: 0; width: 620px; height: 620px; margin: -310px 0 0 -310px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.35) 50%, rgb(255 255 255 / 0));
+  transform: translate3d(var(--mx), var(--my), 0); opacity: var(--on); will-change: transform, opacity;
+}
+.bd-ripple {
+  position: absolute; width: 0; height: 0; border-radius: 50%;
+  border: 2px solid rgb(0 145 211 / 0.6);
+  animation: bd-ripple 0.85s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@keyframes bd-ripple {
+  from { width: 0; height: 0; margin: 0; opacity: 1; }
+  to { width: 280px; height: 280px; margin: -140px 0 0 -140px; opacity: 0; }
+}
+
+/* ---------- widget focus view + dock (components/widgets.jsx) ---------- */
+.focus-backdrop { background: rgb(12 34 54 / 0.46); backdrop-filter: blur(3px); animation: fade-in 0.18s ease-out; }
+.focus-card { animation: pop-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.focus-card > .panel { box-shadow: 0 30px 80px -24px rgb(8 30 52 / 0.55); }
+.focus-scale { zoom: 1.3; }
+.dock { box-shadow: 0 16px 40px -18px rgb(16 42 67 / 0.45); animation: dock-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.965); } to { opacity: 1; transform: none; } }
+@keyframes dock-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 .eyebrow { font-size: 13px; font-weight: 600; color: var(--color-ink-2); }
 .hairline { border-color: var(--color-line); }
 
@@ -78,7 +142,7 @@ body {
 @keyframes outline-pulse { 0%, 100% { outline-color: var(--color-crit); } 50% { outline-color: transparent; } }
 .crit-outline { animation: outline-pulse 1.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .flow-dash, .live-dot, .rise, .crit-outline { animation: none; }
+  .flow-dash, .live-dot, .rise, .crit-outline, .bd-fields i, .focus-card, .focus-backdrop, .dock { animation: none; }
 }
 
 .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
@@ -89,6 +153,12 @@ body {
   --xy-background-color-default: transparent;
   --xy-node-background-color-default: transparent;
   --xy-edge-label-background-color-default: #fff;
+  --xy-controls-button-background-color-default: #fff;
+  --xy-controls-button-background-color-hover-default: var(--color-accent-2);
+  --xy-controls-button-color-default: var(--color-ink);
+  --xy-controls-button-color-hover-default: var(--color-accent);
+  --xy-controls-button-border-color-default: var(--color-line);
+  --xy-controls-box-shadow-default: 0 4px 14px -6px rgb(16 42 67 / 0.35);
   color-scheme: light;
   background: transparent !important;
 }

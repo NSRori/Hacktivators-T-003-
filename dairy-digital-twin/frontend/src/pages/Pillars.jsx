@@ -4,7 +4,10 @@ import { fmt, LABEL } from '../lib/twin'
 import { eventMarks } from '../lib/actions'
 import { AnomalyChart, ChillerChart, LevelsChart, PressureChart, SpoofChart, ThroughputChart, VibrationChart } from '../components/Charts'
 import { IncidentStory, KnockOn } from '../components/Verdict'
-import { Button, PageHeader, Panel, StatusBadge } from '../components/ui'
+import { Button, PageHeader, Panel, ScrollArea, StatusBadge } from '../components/ui'
+
+/* Layout helpers: rows reflow when a widget is minimized, so the rest close the gap. */
+const AUTO = (min) => ({ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${min}px), 1fr))` })
 
 const mins = (v) => (v === null || v === undefined ? '—' : `${fmt(v)} min`)
 const Row = ({ k, v, tone = 'text-ink' }) => (
@@ -39,8 +42,8 @@ export function SyncPage({ frame, history }) {
       <PageHeader eyebrow="Pillar 1" title="Production sync"
         lede="Finds slowdowns that hide inside normal limits, predicts when buffers will run out, and, with Auto-Sync on, rebalances the line by itself."
         right={<StatusBadge size="lg" status={p1.drift_detected ? 'WARN' : 'OK'} label={p1.drift_detected ? 'Silent drift found' : 'No hidden drift'} />} />
-      <div className="grid gap-4 xl:grid-cols-[1fr_1.6fr]">
-        <Panel title="What the engine sees" sub="Rolling Z-scores against a healthy baseline, and forecasts from the live trend.">
+      <div className="flex flex-wrap gap-4">
+        <Panel wid="sees" title="What the engine sees" sub="Rolling Z-scores against a healthy baseline, and forecasts from the live trend." className="flex-[1_1_420px]">
           <div className={`rounded-md border-l-4 px-3 py-2.5 text-[15px] ${p1.drift_detected ? 'border-warn bg-warn-2 text-ink' : 'border-ok bg-ok-2 text-ink'}`}>
             {p1.drift_detected ? <><b>{p1.root_cause}</b>, about <b className="num">{fmt(p1.est_fouling_pct)} %</b>. Legacy pressure limits still read OK.</>
               : 'Every reading matches the healthy baseline.'}
@@ -64,12 +67,12 @@ export function SyncPage({ frame, history }) {
             <Row k="Auto-Sync" v={p1.auto_sync ? 'on: closed-loop control' : 'off: fixed set-points'} tone={p1.auto_sync ? 'text-ok' : 'text-ink-2'} />
           </div>
         </Panel>
-        <div className="grid gap-4">
+        <div className="flex min-w-0 flex-[1.6_1_560px] flex-col gap-4 empty:hidden">
           <ThroughputChart h={history} marks={marks} />
           <PressureChart h={history} marks={marks} />
         </div>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4" style={AUTO(480)}>
         <LevelsChart h={history} marks={marks} />
         <KnockOn frame={frame} />
       </div>
@@ -81,22 +84,18 @@ export function SyncPage({ frame, history }) {
 const TICKET = { OPEN: 'WARN', DISPATCHED: 'MAINT', RESOLVED: 'OK', FAILED: 'CRITICAL' }
 const TICKET_WORD = { OPEN: 'Open', DISPATCHED: 'Technician dispatched', RESOLVED: 'Resolved', FAILED: 'Failed' }
 
-function RulCard({ label, rul, vib }) {
+function RulCard({ wid, label, rul, vib }) {
   const status = rul === null ? 'OK' : rul < 30 ? 'CRITICAL' : 'WARN'
   const pct = rul === null ? 100 : Math.max(2, Math.min(100, (rul / 160) * 100))
   return (
-    <div className="panel p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold text-ink">{label}</span>
-        <StatusBadge status={status} label={rul === null ? 'Healthy' : rul < 30 ? 'Replace now' : 'Wearing'} />
-      </div>
-      <div className={`num mt-3 text-[40px] font-semibold leading-none ${rul === null ? 'text-ok' : rul < 30 ? 'text-crit' : 'text-warn-ink'}`}>
+    <Panel wid={wid} title={label} right={<StatusBadge status={status} label={rul === null ? 'Healthy' : rul < 30 ? 'Replace now' : 'Wearing'} />}>
+      <div className={`num text-[40px] font-semibold leading-none ${rul === null ? 'text-ok' : rul < 30 ? 'text-crit' : 'text-warn-ink'}`}>
         {rul === null ? 'No trend' : `${fmt(rul)} min`}</div>
       <div className="mt-1 text-[14px] text-ink-2">{rul === null ? 'vibration matches a healthy pump' : 'remaining useful life (predicted)'} · {fmt(vib, 2)} mm/s now</div>
       <div className="mt-3 h-2 rounded-sm bg-line-2">
         <div className={`h-full rounded-sm ${rul === null ? 'bg-ok' : rul < 30 ? 'bg-crit' : 'bg-warn'}`} style={{ width: `${pct}%`, transition: 'width .5s' }} />
       </div>
-    </div>
+    </Panel>
   )
 }
 
@@ -108,26 +107,26 @@ export function MaintPage({ frame, history, call }) {
       <PageHeader eyebrow="Pillar 2" title="Predictive maintenance"
         lede="Learns what healthy pumps look like, notices wear long before a fixed vibration alarm, and tells a technician which pump to fix and by when."
         right={<StatusBadge size="lg" status={p2.anomaly_flag ? 'WARN' : 'OK'} label={p2.anomaly_flag ? 'Anomaly detected' : 'Equipment healthy'} />} />
-      <div className="grid gap-4 lg:grid-cols-3">
-        <RulCard label="Homogenizer Pump #1" rul={p2.rul_min.homogenizer_pump_1} vib={frame.pumps.homogenizer_pump_1.vibration_mms} />
-        <RulCard label="Pasteurizer A feed pump" rul={p2.rul_min.pasteurizer_a_pump} vib={frame.pumps.pasteurizer_a_pump.vibration_mms} />
-        <div className="panel p-5">
-          <div className="text-[15px] font-semibold text-ink">ML anomaly score</div>
-          <div className={`num mt-3 text-[40px] font-semibold leading-none ${p2.anomaly_flag ? 'text-crit' : 'text-ink'}`}>{fmt(p2.anomaly_score, 2)}</div>
+      <div className="grid gap-4" style={AUTO(340)}>
+        <RulCard wid="rul-homog" label="Homogenizer Pump #1" rul={p2.rul_min.homogenizer_pump_1} vib={frame.pumps.homogenizer_pump_1.vibration_mms} />
+        <RulCard wid="rul-past-a" label="Pasteurizer A feed pump" rul={p2.rul_min.pasteurizer_a_pump} vib={frame.pumps.pasteurizer_a_pump.vibration_mms} />
+        <Panel wid="anomaly-now" title="ML anomaly score" right={<StatusBadge status={p2.anomaly_flag ? 'WARN' : 'OK'} label={p2.anomaly_flag ? 'Anomaly' : 'Normal'} />}>
+          <div className={`num text-[40px] font-semibold leading-none ${p2.anomaly_flag ? 'text-crit' : 'text-ink'}`}>{fmt(p2.anomaly_score, 2)}</div>
           <div className="mt-1 text-[14px] text-ink-2">0 = like the healthy baseline · alarm at 0.60</div>
           <div className="relative mt-3 h-2 rounded-sm bg-line-2">
             <div className={`h-full rounded-sm ${p2.anomaly_score >= 0.6 ? 'bg-crit' : 'bg-accent'}`} style={{ width: `${p2.anomaly_score * 100}%`, transition: 'width .3s' }} />
             <div className="absolute -top-1 h-4 w-px bg-ink" style={{ left: '60%' }} />
           </div>
           <div className="mt-2 text-[13.5px] text-ink-2">Biggest contributor: <b className="text-ink">{(p2.top_feature || '—').replaceAll('_', ' ')}</b></div>
-        </div>
+        </Panel>
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-4">
+      <div className="flex flex-wrap gap-4">
+        <div className="flex min-w-0 flex-[1.6_1_560px] flex-col gap-4 empty:hidden">
           <VibrationChart h={history} marks={marks} height={260} />
           <AnomalyChart h={history} marks={marks} />
         </div>
-        <Panel title="Dispatch tickets" sub="Raised automatically when the model sees wear. Auto-Sync dispatches by itself once a ticket turns critical.">
+        <Panel wid="tickets" title="Dispatch tickets" zoom="fill" className="flex-[1_1_380px]"
+          sub="Raised automatically when the model sees wear. Auto-Sync dispatches by itself once a ticket turns critical.">
           {p2.tickets.length === 0 && <p className="py-6 text-center text-[14.5px] text-ink-2">No tickets. All equipment is healthy.</p>}
           <ul className="space-y-3">
             {p2.tickets.map((t) => (
@@ -199,14 +198,14 @@ function SocList({ alerts }) {
 }
 
 const KNOWN = ['10.0.0.10', '10.0.0.11', '10.0.0.20']
-function PacketTable({ packets }) {
+function PacketTable({ packets, className = '' }) {
   const [onlySus, setOnlySus] = useState(false)
   const rows = packets.filter((p) => !onlySus || !KNOWN.includes(p.src) || (p.op === 'WRITE' && p.src !== '10.0.0.10'))
   return (
-    <Panel title="OT packet monitor" sub="Modbus/TCP and OPC-UA frames on the plant network, newest first."
+    <Panel wid="packets" title="OT packet monitor" sub="Modbus/TCP and OPC-UA frames on the plant network, newest first." zoom="fill" className={className}
       right={<Button kind={onlySus ? 'primary' : 'secondary'} onClick={() => setOnlySus(!onlySus)}>{onlySus ? 'Showing suspicious only' : 'Show suspicious only'}</Button>}
-      bodyClass="!p-0">
-      <div className="scroll-thin max-h-[420px] overflow-y-auto">
+      bodyClass="!p-0 flex flex-col">
+      <ScrollArea limit="max-h-[420px]">
         <table className="w-full table-fixed text-[13.5px]">
           <thead className="sticky top-0 bg-surface-2 text-left text-[13px] text-ink-2">
             <tr className="h-9">
@@ -233,7 +232,7 @@ function PacketTable({ packets }) {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </Panel>
   )
 }
@@ -249,8 +248,8 @@ export function CyberPage({ frame, history, packets }) {
       <PageHeader eyebrow="Pillar 3" title="Cyber defense"
         lede="Checks what the controllers claim against physics, flags rogue network commands, and isolates only the compromised unit, so the plant never has to shut down."
         right={<StatusBadge size="lg" status={st} label={`Threat: ${word}`} />} />
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Panel title="Threat status">
+      <div className="grid gap-4" style={AUTO(360)}>
+        <Panel wid="threat" title="Threat status">
           <div className={`rounded-md border-l-4 px-3 py-2.5 ${st === 'OK' ? 'border-ok bg-ok-2' : st === 'WARN' ? 'border-warn bg-warn-2' : st === 'CRITICAL' ? 'border-crit bg-crit-2' : 'border-iso bg-iso-2'}`}>
             <div className="text-[20px] font-semibold text-ink">{word}</div>
             <p className="text-[14px] leading-snug text-ink-2">{desc}</p>
@@ -263,7 +262,7 @@ export function CyberPage({ frame, history, packets }) {
             <Row k="Frames this minute" v={p3.packets_per_tick} />
           </div>
         </Panel>
-        <Panel title="Pasteurizer A: does the PLC tell the truth?" sub="Reported flow against flow implied by the motor drive current.">
+        <Panel wid="check-past-a" title="Pasteurizer A: does the PLC tell the truth?" sub="Reported flow against flow implied by the motor drive current.">
           <div className="flex items-end gap-6">
             <div><div className="text-[13px] text-ink-2">PLC says</div><div className="num text-[30px] font-semibold text-ink">{fmt(a.reported_flow)}<span className="text-[14px] font-normal text-ink-2"> L/min</span></div></div>
             <div><div className="text-[13px] text-ink-2">Physics says</div><div className={`num text-[30px] font-semibold ${a.mismatch_pct > 12 ? 'text-crit' : 'text-ink'}`}>{fmt(a.implied_flow)}<span className="text-[14px] font-normal text-ink-2"> L/min</span></div></div>
@@ -273,7 +272,7 @@ export function CyberPage({ frame, history, packets }) {
               : <StatusBadge status={a.mismatch_pct > 12 ? 'CRITICAL' : 'OK'} label={a.mismatch_pct > 12 ? `Mismatch ${fmt(a.mismatch_pct, 1)} %: spoofed` : `Mismatch ${fmt(a.mismatch_pct, 1)} %: consistent`} />}
           </div>
         </Panel>
-        <Panel title="Silo chiller: is the thermometer honest?" sub="PLC reading against independent sensors at the pasteurizer inlets.">
+        <Panel wid="check-chiller" title="Silo chiller: is the thermometer honest?" sub="PLC reading against independent sensors at the pasteurizer inlets.">
           <div className="flex items-end gap-6">
             <div><div className="text-[13px] text-ink-2">PLC says</div><div className="num text-[30px] font-semibold text-ink">{fmt(c.reported_c, 1)}<span className="text-[14px] font-normal text-ink-2"> °C</span></div></div>
             <div><div className="text-[13px] text-ink-2">Inlet sensors</div><div className={`num text-[30px] font-semibold ${c.diff_c > 1.5 ? 'text-crit' : 'text-ink'}`}>{fmt(c.inlet_c, 1)}<span className="text-[14px] font-normal text-ink-2"> °C</span></div></div>
@@ -281,13 +280,15 @@ export function CyberPage({ frame, history, packets }) {
           <div className="mt-3"><StatusBadge status={c.diff_c > 1.5 ? 'CRITICAL' : 'OK'} label={c.diff_c > 1.5 ? `Off by ${fmt(c.diff_c, 1)} °C: spoofed` : 'Readings agree'} /></div>
         </Panel>
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4" style={AUTO(480)}>
         <SpoofChart h={history} marks={marks} />
         <ChillerChart h={history} marks={marks} />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
-        <Panel title="Security alerts" sub="Grouped by type. Click one for details and the automatic response."><SocList alerts={p3.alerts} /></Panel>
-        <PacketTable packets={packets} />
+      <div className="flex flex-wrap items-start gap-4">
+        <Panel wid="alerts" title="Security alerts" sub="Grouped by type. Click one for details and the automatic response." zoom="fill" className="flex-[1_1_400px]">
+          <SocList alerts={p3.alerts} />
+        </Panel>
+        <PacketTable packets={packets} className="flex-[1.4_1_560px]" />
       </div>
     </div>
   )
@@ -304,26 +305,28 @@ export function LogPage({ frame }) {
   return (
     <div className="space-y-4">
       <PageHeader eyebrow="Everything, in order" title="Event log" lede="Every finding and action from the three pillars, plus physical events in the plant. Newest first." />
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-        <Panel title="Log" right={(
+      <div className="flex flex-wrap items-start gap-4">
+        <Panel wid="log" title="Log" zoom="fill" className="flex-[1.5_1_560px]" right={(
           <div className="flex flex-wrap gap-1">
             {FILTERS.map(([k, l]) => (
               <button key={k} onClick={() => setF(k)} className={`rounded-md px-2.5 py-1 text-[13.5px] ${f === k ? 'bg-accent text-white' : 'text-ink-2 hover:bg-surface-2'}`}>{l}</button>
             ))}
           </div>
-        )} bodyClass="!p-0">
-          <ul className="scroll-thin max-h-[640px] divide-y divide-line-2 overflow-y-auto">
-            {rows.length === 0 && <li className="px-5 py-8 text-center text-[14.5px] text-ink-2">Nothing logged yet.</li>}
-            {rows.map((e, i) => (
-              <li key={`${e.tick}-${i}-${e.msg}`} className="grid grid-cols-[80px_110px_1fr] items-start gap-3 px-5 py-2.5 text-[14.5px]">
-                <span className="num text-ink-2">min {e.tick}</span>
-                <span><StatusBadge status={LVL[e.level] || 'OK'} label={SRC_NAME[e.source] || e.source} /></span>
-                <span className="text-ink">{e.msg}</span>
-              </li>
-            ))}
-          </ul>
+        )} bodyClass="!p-0 flex flex-col">
+          <ScrollArea limit="max-h-[640px]">
+            <ul className="divide-y divide-line-2">
+              {rows.length === 0 && <li className="px-5 py-8 text-center text-[14.5px] text-ink-2">Nothing logged yet.</li>}
+              {rows.map((e, i) => (
+                <li key={`${e.tick}-${i}-${e.msg}`} className="grid grid-cols-[80px_110px_1fr] items-start gap-3 px-5 py-2.5 text-[14.5px]">
+                  <span className="num text-ink-2">min {e.tick}</span>
+                  <span><StatusBadge status={LVL[e.level] || 'OK'} label={SRC_NAME[e.source] || e.source} /></span>
+                  <span className="text-ink">{e.msg}</span>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
         </Panel>
-        <div className="h-[600px]"><IncidentStory frame={frame} max={20} /></div>
+        <IncidentStory frame={frame} max={20} className="h-[600px] flex-[1_1_380px]" />
       </div>
     </div>
   )

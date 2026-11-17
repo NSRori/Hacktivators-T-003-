@@ -1,13 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Background, BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, NodeToolbar, Position, ReactFlow } from '@xyflow/react'
+import { Background, BaseEdge, Controls, EdgeLabelRenderer, getSmoothStepPath, Handle, MarkerType, NodeToolbar, Position, ReactFlow } from '@xyflow/react'
 import { MousePointerClick, ShieldAlert, X } from 'lucide-react'
 import { fmt, fmtInt, post, TONE, UNIT_INFO } from '../lib/twin'
 import { actionsFor, openTicket } from '../lib/actions'
-import { BTN, StatusBadge } from './ui'
+import { BTN, Panel, StatusBadge } from './ui'
+import { useZoomed } from './widgets'
 
 const W = 252
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
-const C = { line: '#D9D3C5', line2: '#E7E2D6', steel: '#8A949B', ink: '#1B2A33', ink2: '#5B6770', accent: '#2F5D7C', milk: '#A9C3D6', ok: '#2E7D5B', okTint: '#CFE5D8', warn: '#C98A00', crit: '#B83A2E', iso: '#6B3FA0' }
+const C = { line: '#D3DEEA', line2: '#E3EAF2', steel: '#7F93A6', ink: '#152A3B', ink2: '#4B5D6E', accent: '#0B6FA8', flow: '#0091D3', milk: '#A9D2EE',
+  shell: '#F4F8FC', ok: '#2E7D5B', okTint: '#CFE5D8', warn: '#C98A00', crit: '#B83A2E', iso: '#6B3FA0' }
 
 /* ------------------------------------------------------------------ equipment drawings */
 function Vessel({ level, target = 50 }) {
@@ -20,7 +22,7 @@ function Vessel({ level, target = 50 }) {
   const ty = 7 + inner * (1 - target / 100)
   return (
     <svg width={w + 14} height={h} viewBox={`0 0 ${w + 14} ${h}`} className="shrink-0" aria-hidden>
-      <rect x="1" y="1" width={w} height={h - 2} rx="12" fill="#F4F1EA" stroke={C.steel} strokeWidth="2" />
+      <rect x="1" y="1" width={w} height={h - 2} rx="12" fill={C.shell} stroke={C.steel} strokeWidth="2" />
       <clipPath id={`v${target}${Math.round(lv)}`}><rect x="5" y="7" width={w - 8} height={inner} rx="8" /></clipPath>
       <rect x="5" y={7 + inner - fill} width={w - 8} height={fill} fill={fillCol} clipPath={`url(#v${target}${Math.round(lv)})`} style={{ transition: 'all .6s ease' }} />
       <line x1="5" x2={w - 3} y1={7 + inner - fill} y2={7 + inner - fill} stroke={C.accent} strokeWidth="1.5" style={{ transition: 'all .6s ease' }} />
@@ -241,11 +243,11 @@ function Pipe(props) {
   const [path, lx, ly] = getSmoothStepPath({ ...props, borderRadius: 16, offset: 24 })
   const flow = data.flow || 0
   const moving = flow >= 1 && !data.blocked
-  const color = data.blocked ? C.iso : flow < 1 ? C.steel : data.tone === 'CRITICAL' ? C.crit : data.tone === 'WARN' ? C.warn : C.accent
+  const color = data.blocked ? C.iso : flow < 1 ? C.steel : data.tone === 'CRITICAL' ? C.crit : data.tone === 'WARN' ? C.warn : C.flow
   return (
     <>
       <path d={path} fill="none" stroke={C.line} strokeWidth={13} strokeLinecap="round" />
-      <path d={path} fill="none" stroke="#F4F1EA" strokeWidth={9} strokeLinecap="round" />
+      <path d={path} fill="none" stroke={C.shell} strokeWidth={9} strokeLinecap="round" />
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className={moving ? 'flow-dash' : ''}
         style={{ stroke: color, strokeWidth: moving ? 2 + Math.min(3.5, flow / 240) : 2, strokeDasharray: data.blocked ? '4 5' : undefined,
           animationDuration: `${clamp(320 / Math.max(flow, 1), 0.3, 3)}s` }} />
@@ -292,17 +294,47 @@ const TYPE = { silo: 'silo', surge_tank: 'surge', pasteurizer_a: 'past', pasteur
 const NODES = Object.keys(TYPE).map((id) => ({ id, type: TYPE[id], position: POS[id], draggable: false }))
 const FIT = { padding: { x: '24px', y: '30px' } }     // v13: bare numbers are pixels, so be explicit
 
-export default function PlantFloor({ frame, notify }) {
+/* The React Flow canvas. A component of its own so it remounts (and re-fits) when the card opens in the
+   focus view, where scroll-to-zoom, drag-to-pan and the zoom buttons switch on. */
+function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
+  const zoomed = useZoomed()
   const flow = useRef(null)
   const box = useRef(null)
-  const [hover, setHover] = useState(null)
-  const [pinned, setPinned] = useState(null)
   useEffect(() => {                                    // re-fit whenever the canvas changes size
     if (!box.current) return undefined
     const ro = new ResizeObserver(() => flow.current?.fitView(FIT))
     ro.observe(box.current)
     return () => ro.disconnect()
   }, [])
+  useEffect(() => () => setHover(null), [setHover])   // leaving the focus view: no hover card left hanging
+  return (
+    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[9px] bg-[#F8FBFE]">
+      <NodeData.Provider value={view}>
+        <Ui.Provider value={ui}>
+          <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
+            onInit={(inst) => {
+              flow.current = inst
+              // node sizes change once webfonts finish loading: fit again then
+              setTimeout(() => inst.fitView(FIT), 300)
+              document.fonts?.ready.then(() => inst.fitView(FIT))
+            }}
+            onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)}
+            onNodeClick={(_, n) => setPinned((p) => (p === n.id ? null : n.id))} onPaneClick={() => setPinned(null)}
+            nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
+            zoomOnScroll={zoomed} panOnDrag={zoomed} zoomOnDoubleClick={zoomed} zoomOnPinch={zoomed} preventScrolling={zoomed}
+            minZoom={0.3} maxZoom={2.5} style={{ background: 'transparent' }}>
+            <Background color="#D3E0EC" bgColor="#F8FBFE" gap={22} size={1.2} />
+            {zoomed && <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT} />}
+          </ReactFlow>
+        </Ui.Provider>
+      </NodeData.Provider>
+    </div>
+  )
+}
+
+export default function PlantFloor({ frame, notify, className = '' }) {
+  const [hover, setHover] = useState(null)
+  const [pinned, setPinned] = useState(null)
 
   const act = useCallback(async (a) => {
     const r = await post(a.path, a.body)
@@ -334,7 +366,7 @@ export default function PlantFloor({ frame, notify }) {
 
     const tone = (n) => units[n]?.status
     const e = (src, sh, dst, th, f, extra = {}) => {
-      const color = extra.blocked ? C.iso : f < 1 ? C.steel : tone(dst) === 'CRITICAL' ? C.crit : tone(dst) === 'WARN' ? C.warn : C.accent
+      const color = extra.blocked ? C.iso : f < 1 ? C.steel : tone(dst) === 'CRITICAL' ? C.crit : tone(dst) === 'WARN' ? C.warn : C.flow
       return { id: `${src}-${dst}`, source: src, sourceHandle: sh, target: dst, targetHandle: th, type: 'pipe',
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14, markerUnits: 'userSpaceOnUse' }, data: { flow: f, tone: tone(dst), ...extra } }
     }
@@ -356,36 +388,27 @@ export default function PlantFloor({ frame, notify }) {
   const ui = useMemo(() => ({ hover, pinned, setPinned, act, actionsFor: (id) => actionsFor(id, frame) }), [hover, pinned, act, frame])
 
   return (
-    <section className="panel flex h-full flex-col overflow-hidden">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line-2 px-5 py-3">
-        <h2 className="text-[17px] font-semibold text-ink">Plant floor</h2>
-        <span className="flex items-center gap-1.5 text-[13.5px] text-ink-2"><MousePointerClick size={15} className="text-accent" />Hover a unit to see what it does · click to pin it and act</span>
-        <div className="ml-auto flex items-center gap-4 text-[13px] text-ink-2">
-          <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm bg-accent" />milk flowing</span>
+    <Panel wid="floor" title="Plant floor" zoom="fill" className={`overflow-hidden ${className}`} bodyClass="!p-0 flex flex-col"
+      sub={<FloorHint />}
+      right={(
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-[13px] text-ink-2">
+          <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm bg-brand" />milk flowing</span>
           <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm bg-warn" />at risk</span>
           <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm bg-crit" />critical</span>
           <span className="flex items-center gap-1.5"><span className="h-1 w-5 rounded-sm border-t-2 border-dashed border-iso" />valve closed</span>
         </div>
-      </header>
-      <div ref={box} className="relative min-h-[420px] flex-1 bg-[#FBFAF6]">
-        <NodeData.Provider value={view}>
-          <Ui.Provider value={ui}>
-            <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
-              onInit={(inst) => {
-                flow.current = inst
-                // node sizes change once webfonts finish loading: fit again then
-                setTimeout(() => inst.fitView(FIT), 300)
-                document.fonts?.ready.then(() => inst.fitView(FIT))
-              }}
-              onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)}
-              onNodeClick={(_, n) => setPinned((p) => (p === n.id ? null : n.id))} onPaneClick={() => setPinned(null)}
-              nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} zoomOnScroll={false} panOnDrag={false}
-              zoomOnDoubleClick={false} zoomOnPinch={false} preventScrolling={false} minZoom={0.3} style={{ background: 'transparent' }}>
-              <Background color="#E2DCCD" bgColor="#FBFAF6" gap={22} size={1.2} />
-            </ReactFlow>
-          </Ui.Provider>
-        </NodeData.Provider>
-      </div>
-    </section>
+      )}>
+      <FloorCanvas view={view} edges={edges} ui={ui} setHover={setHover} setPinned={setPinned} />
+    </Panel>
+  )
+}
+
+function FloorHint() {
+  const zoomed = useZoomed()
+  return (
+    <span className="flex items-center gap-1.5">
+      <MousePointerClick size={15} className="shrink-0 text-accent" />
+      Hover a unit to see what it does · click to pin it and act{zoomed ? ' · scroll to zoom, drag to pan' : ''}
+    </span>
   )
 }

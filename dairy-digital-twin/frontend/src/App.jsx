@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { post, SCENARIOS, TABS, useRoute, useTwin } from './lib/twin'
 import { AppHeader, ScenarioBar, Toast } from './components/Chrome'
+import Backdrop from './components/Backdrop'
+import { WidgetProvider } from './components/widgets'
 import Home from './pages/Home'
 import Twin from './pages/Twin'
 import { CyberPage, LogPage, MaintPage, SyncPage } from './pages/Pillars'
@@ -44,10 +46,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [call, run, mode])
 
-  if (route === 'home' || !TABS.some((t) => t.key === route)) {
-    return (<><Home frame={frame} connected={connected} go={go} run={run} /><Toast toast={toast} /></>)
-  }
+  const scope = TABS.some((t) => t.key === route) ? route : 'home'
+  return (
+    <WidgetProvider scope={scope}>
+      <Backdrop />
+      {scope === 'home' ? (
+        <><Home frame={frame} connected={connected} go={go} run={run} /><Toast toast={toast} /></>
+      ) : (
+        <AppPage {...{ route, go, frame, history, packets, mode, connected, call, notify, presenter, setPresenter, toast }} />
+      )}
+    </WidgetProvider>
+  )
+}
 
+function AppPage({ route, go, frame, history, packets, mode, connected, call, notify, presenter, setPresenter, toast }) {
   const page = !frame ? null
     : route === 'twin' ? <Twin frame={frame} mode={mode} history={history} call={call} notify={notify} />
       : route === 'sync' ? <SyncPage frame={frame} history={history} />

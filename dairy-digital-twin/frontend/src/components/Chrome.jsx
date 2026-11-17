@@ -7,7 +7,7 @@ import { BTN, Kbd, StatusBadge } from './ui'
 export function LogoMark({ size = 30 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden>
-      <rect width="32" height="32" rx="7" fill="#2F5D7C" />
+      <rect width="32" height="32" rx="7" fill="#0091D3" />
       <path d="M11 7h10v4l2.5 3.5V25a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 25V14.5L11 11z" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M8.5 18.5h15" stroke="#fff" strokeWidth="1.8" />
     </svg>
@@ -112,7 +112,7 @@ export function ScenarioBar({ frame, mode, call }) {
   const active = frame?.scenario
   const since = frame && frame.scenario_tick !== null && frame.scenario_tick !== undefined ? frame.tick - frame.scenario_tick : null
   return (
-    <div className="border-b border-line bg-surface-2">
+    <div className="border-b border-line bg-white/75">
       <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2 px-6 py-2.5">
         <span className="mr-1 text-[14px] font-semibold text-ink">Scenarios</span>
         {SCENARIOS.map((s) => {

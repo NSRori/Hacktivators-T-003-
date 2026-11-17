@@ -122,8 +122,8 @@ export const UNITS = ['silo', 'pasteurizer_a', 'pasteurizer_b', 'homogenizer', '
 /** Engine status → light-theme classes. Every status also gets an icon + a word (never colour alone). */
 export const TONE = {
   OK: { word: 'Normal', text: 'text-ok', soft: 'bg-ok-2', fill: 'bg-ok', outline: 'outline-line', hex: '#2E7D5B' },
-  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#2F5D7C' },
-  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#2F5D7C' },
+  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#0B6FA8' },
+  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#0B6FA8' },
   WARN: { word: 'Warning', text: 'text-warn-ink', soft: 'bg-warn-2', fill: 'bg-warn', outline: 'outline-warn', hex: '#C98A00' },
   CRITICAL: { word: 'Critical', text: 'text-crit', soft: 'bg-crit-2', fill: 'bg-crit', outline: 'outline-crit', hex: '#B83A2E' },
   QUARANTINED: { word: 'Isolated', text: 'text-iso', soft: 'bg-iso-2', fill: 'bg-iso', outline: 'outline-iso', hex: '#6B3FA0' },

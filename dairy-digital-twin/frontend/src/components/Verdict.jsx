@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { fmt, fmtInt, LABEL, LEGACY, SCENARIOS, TONE, UNITS } from '../lib/twin'
-import { STATUS_ICON, StatusBadge } from './ui'
+import { Panel, STATUS_ICON, StatusBadge } from './ui'
 
 const RANK = { OK: 0, WATCH: 1, MAINT: 1, WARN: 2, QUARANTINED: 2, CRITICAL: 3 }
 
@@ -111,24 +111,21 @@ function Mark({ at, label, sub, tone, align = 'center', hideLabel = false }) {
   )
 }
 
-export function Verdict({ frame }) {
+export function Verdict({ frame, className = '' }) {
   return (
-    <section className="panel flex flex-col gap-3 p-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-[17px] font-semibold text-ink">Same plant, two monitors</h2>
-        <span className="text-[13px] text-ink-2">which would you trust?</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <Panel wid="verdict" title="Same plant, two monitors" right={<span className="text-[13px] text-ink-2">which would you trust?</span>}
+      className={className} bodyClass="@container flex flex-col gap-3 !px-4 !pt-3.5">
+      <div className="grid grid-cols-1 gap-3 @min-[420px]:grid-cols-2">
         <LegacyPanel legacy={frame.legacy} />
         <EnginePanel engine={frame.engine} />
       </div>
       <DetectionTimeline frame={frame} />
-    </section>
+    </Panel>
   )
 }
 
 /* ---------------------------------------------------------------- KPIs */
-export function KpiRow({ frame }) {
+export function KpiRow({ frame, className = '' }) {
   const k = frame.kpi
   const ret = k.retention_pct
   const sret = k.scenario_retention_pct
@@ -139,23 +136,26 @@ export function KpiRow({ frame }) {
     { label: 'Milk lost or unsafe', v: fmtInt(lost), u: 'L', sub: lost ? `${fmtInt(k.wasted_l)} spilled · ${fmtInt(k.unsafe_l + k.at_risk_l)} unsafe` : 'none', tone: lost ? 'text-crit' : 'text-ink' },
     { label: 'Filler stopped', v: fmt(k.starved_min), u: 'min', sub: k.starved_min ? 'waiting for milk' : 'never ran dry', tone: k.starved_min ? 'text-warn-ink' : 'text-ink' },
   ]
+  // 4 across when the card is wide enough, otherwise 2 x 2: the tiles never squeeze their text into the next card
   return (
-    <section className="panel grid grid-cols-2 divide-line-2 sm:grid-cols-4 sm:divide-x">
-      {tiles.map((t) => (
-        <div key={t.label} className="px-4 py-3.5">
-          <div className="text-[13px] text-ink-2">{t.label}</div>
-          <div className={`num mt-1 text-[26px] font-semibold leading-none ${t.tone}`}>{t.v}<span className="ml-1 text-[13px] font-normal text-ink-2">{t.u}</span></div>
-          <div className="mt-1.5 text-[13px] leading-snug text-ink-2">{t.sub}</div>
-        </div>
-      ))}
-    </section>
+    <Panel wid="kpi" title="Production at a glance" className={className} bodyClass="@container !p-0">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-b-[9px] bg-line-2 @min-[560px]:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="min-w-0 bg-surface px-4 py-3.5">
+            <div className="text-[13px] text-ink-2">{t.label}</div>
+            <div className={`num mt-1 whitespace-nowrap text-[26px] font-semibold leading-none ${t.tone}`}>{t.v}<span className="ml-1 text-[13px] font-normal text-ink-2">{t.u}</span></div>
+            <div className="mt-1.5 text-[13px] leading-snug text-ink-2">{t.sub}</div>
+          </div>
+        ))}
+      </div>
+    </Panel>
   )
 }
 
 /* ---------------------------------------------------------------- incident story */
 const SRC = { pillar1: ['Sync', 'bg-accent'], pillar2: ['Maintenance', 'bg-warn'], pillar3: ['Cyber', 'bg-iso'], plant: ['Plant', 'bg-ink-3'] }
 
-export function IncidentStory({ frame, max = 12 }) {
+export function IncidentStory({ frame, max = 12, className = '' }) {
   const st = frame.scenario_tick
   const scn = SCENARIOS.find((s) => s.key === frame.scenario)
   let items = []
@@ -170,51 +170,50 @@ export function IncidentStory({ frame, max = 12 }) {
     }
     items = items.slice(0, max).reverse()
   }
+  return (
+    <Panel wid="story" title="What happened, step by step" zoom="fill" className={className} bodyClass="!p-0 flex flex-col"
+      right={scn && <span className="num text-[13px] text-ink-2">{scn.long} · T+{frame.tick - st} min</span>}>
+      {!scn ? (
+        <p className="px-5 py-4 text-[14.5px] text-ink-2">Nothing to report. Start a scenario and each pillar’s findings and actions appear here as they happen.</p>
+      ) : <StoryList items={items} st={st} />}
+    </Panel>
+  )
+}
+
+/* its own component so it remounts (and scrolls to the newest line) when the card opens in the focus view */
+function StoryList({ items, st }) {
   const list = useRef(null)
   const newest = items.length ? items[items.length - 1].tick + items[items.length - 1].msg : ''
   useEffect(() => {
     if (list.current) list.current.scrollTo({ top: list.current.scrollHeight, behavior: 'smooth' })
   }, [newest])
   return (
-    <section className="panel flex min-h-0 flex-col">
-      <header className="flex items-baseline justify-between border-b border-line-2 px-5 py-3.5">
-        <h3 className="text-[16px] font-semibold text-ink">What happened, step by step</h3>
-        {scn && <span className="num text-[13px] text-ink-2">{scn.long} · T+{frame.tick - st} min</span>}
-      </header>
-      {!scn ? (
-        <p className="px-5 py-4 text-[14.5px] text-ink-2">Nothing to report. Start a scenario and each pillar’s findings and actions appear here as they happen.</p>
-      ) : (
-        <ol ref={list} className="scroll-thin min-h-0 flex-1 space-y-2.5 overflow-y-auto px-5 py-4">
-          {items.length === 0 && <li className="text-[14px] text-ink-2">Injected. Waiting for the first symptom…</li>}
-          {items.map((e) => {
-            const [name, dot] = SRC[e.source] || SRC.plant
-            return (
-              <li key={`${e.tick}-${e.msg}`} className="rise grid grid-cols-[64px_96px_1fr] gap-2 text-[14px] leading-snug">
-                <span className="num text-ink-2">+{e.tick - st} min</span>
-                <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-2"><span className={`h-2 w-2 rounded-full ${dot}`} />{name}</span>
-                <span className={e.level === 'crit' ? 'font-medium text-crit' : 'text-ink'}>{e.msg.replace(/^\[[A-Z_]+\]\s*/, '')}</span>
-              </li>
-            )
-          })}
-        </ol>
-      )}
-    </section>
+    <ol ref={list} className="scroll-thin min-h-0 flex-1 space-y-2.5 overflow-y-auto px-5 py-4">
+      {items.length === 0 && <li className="text-[14px] text-ink-2">Injected. Waiting for the first symptom…</li>}
+      {items.map((e) => {
+        const [name, dot] = SRC[e.source] || SRC.plant
+        return (
+          <li key={`${e.tick}-${e.msg}`} className="rise grid grid-cols-[64px_96px_1fr] gap-2 text-[14px] leading-snug">
+            <span className="num text-ink-2">+{e.tick - st} min</span>
+            <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink-2"><span className={`h-2 w-2 rounded-full ${dot}`} />{name}</span>
+            <span className={e.level === 'crit' ? 'font-medium text-crit' : 'text-ink'}>{e.msg.replace(/^\[[A-Z_]+\]\s*/, '')}</span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
 /* ---------------------------------------------------------------- knock-on effects */
-export function KnockOn({ frame }) {
+export function KnockOn({ frame, className = '' }) {
   const c = frame.engine.pillar1.cascade
   return (
-    <section className="panel">
-      <header className="border-b border-line-2 px-5 py-3.5">
-        <h3 className="text-[16px] font-semibold text-ink">Knock-on effects</h3>
-        <p className="mt-0.5 text-[13.5px] text-ink-2">The dependency graph follows a problem downstream (and upstream) and estimates when it arrives.</p>
-      </header>
+    <Panel wid="knockon" title="Knock-on effects" zoom="fill" className={className} bodyClass="!p-0 scroll-thin overflow-y-auto"
+      sub="The dependency graph follows a problem downstream (and upstream) and estimates when it arrives.">
       {c.length === 0 ? <p className="px-5 py-4 text-[14.5px] text-ink-2">None. Every stage is balanced.</p> : (
         <ul className="divide-y divide-line-2">
           {c.map((x) => (
-            <li key={x.from + x.node} className="flex items-center gap-3 px-5 py-2.5 text-[14.5px]">
+            <li key={x.from + x.node} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-[14.5px]">
               <StatusBadge status={x.eta_min !== null && x.eta_min < 1 ? 'CRITICAL' : 'WARN'} label={x.eta_min === null ? 'At risk' : x.eta_min < 1 ? 'Now' : `${fmt(x.eta_min)} min`} />
               <span className="text-ink"><b className="font-semibold">{LABEL[x.node]}</b> {x.effect}</span>
               <span className="ml-auto text-[13px] text-ink-2">caused by {LABEL[x.from]}</span>
@@ -222,7 +221,7 @@ export function KnockOn({ frame }) {
           ))}
         </ul>
       )}
-    </section>
+    </Panel>
   )
 }
 

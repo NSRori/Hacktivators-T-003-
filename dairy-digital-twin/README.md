@@ -59,9 +59,15 @@ Presenter mode are in the **Controls** menu (1× = 2 ticks/s, 1 tick = 1 simulat
 * **Live twin:** hover any unit for what it does, what the engine watches and its live status. Click a unit to pin
   the card and act (isolate, release, dispatch, cleaning flush, backup chiller). The caption strip says in one sentence
   what is happening and offers the one-click fix.
-* **Keyboard:** `1`-`4` run a scenario, `R` reset, `A` Auto-Sync, `I` Auto-Isolate, `P` presenter mode.
-* **Look:** light "milk and stainless steel" palette (CSS variables in `src/index.css`), IBM Plex Sans. Status colours
-  are used only for status, and always come with an icon and a word. This follows `../UI_REVIEW_AND_REDESIGN_SPEC.md`.
+* **Every card is a widget:** `–` minimizes it to the dock at the bottom of the screen (the other cards close the gap;
+  click a chip or *Restore all* to bring it back, and the choice is remembered in this browser), and `⤢` opens it on its
+  own in a focus view (`Esc` or a click outside closes it). In the focus view charts fill the screen, number cards are
+  magnified, and the plant floor gains scroll-to-zoom, drag-to-pan and zoom buttons.
+* **Keyboard:** `1`-`4` run a scenario, `R` reset, `A` Auto-Sync, `I` Auto-Isolate, `P` presenter mode, `Esc` close the focus view.
+* **Look:** sky-blue / periwinkle / white palette (CSS variables in `src/index.css`) on an animated gradient background
+  that reacts to the mouse (`components/Backdrop.jsx`; it calms down under *reduce motion*). Cards stay white so text
+  keeps its contrast. IBM Plex Sans. Status colours are used only for status, and always come with an icon and a word
+  (`../UI_REVIEW_AND_REDESIGN_SPEC.md`).
 
 ## Code map (plan roles)
 
@@ -75,6 +81,7 @@ Presenter mode are in the **Controls** menu (1× = 2 ticks/s, 1 tick = 1 simulat
 | `frontend/src/components/Verdict.jsx` | Pod 3 — M6 | Legacy SCADA vs Three-Pillar Engine, "who noticed first" detection timeline, KPIs, incident story, knock-on effects |
 | `frontend/src/pages/Pillars.jsx`, `components/Charts.jsx` | Pod 3 — M6 | Production sync / Predictive maintenance / Cyber defense / Event log pages; annotated charts, tickets, SOC alerts, packet monitor |
 | `frontend/src/components/Chrome.jsx`, `lib/` | Pod 3 — M5 | Header, tabs, scenario bar, caption strip; WebSocket hook, hash router, action helpers |
+| `frontend/src/components/ui.jsx`, `widgets.jsx`, `Backdrop.jsx` | Pod 3 — M5 | `Panel` (every card, with minimize / zoom), dock and focus view, the animated background |
 | `backend/tests/run_scenarios.py` | M6 QA | Headless pass/fail check of every scenario |
 
 ## REST / WebSocket contract
