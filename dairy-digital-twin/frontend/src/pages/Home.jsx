@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Radar, ShieldCheck, Timer } from 'lucide-react'
+import { ArrowRight, Menu, Radar, ShieldCheck, Timer, X } from 'lucide-react'
 import { SCENARIOS, TONE, UNIT_INFO, UNITS } from '../lib/twin'
 import { LogoMark, ThemeToggle } from '../components/Chrome'
 import { Button, Num, Panel } from '../components/ui'
@@ -131,20 +131,36 @@ const PILLARS = [
 export default function Home({ frame, connected, go, run }) {
   const live = frame && connected
   const phase = useLoop()
+  const [menu, setMenu] = useState(false)
   const eng = frame?.engine.overall
   return (
     <div className="min-h-screen">
       <header className="band sticky top-0 z-40 border-b border-line bg-header/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-6 px-6">
-          <div className="flex items-center gap-2.5"><LogoMark size={32} /><span className="text-[17px] font-semibold text-ink">Dairy Digital Twin</span></div>
+          <div className="flex items-center gap-2.5"><LogoMark size={32} /><span className="whitespace-nowrap text-[17px] font-semibold text-ink">Dairy Digital Twin</span></div>
           <nav className="ml-6 hidden gap-6 text-[14.5px] text-ink-2 md:flex">
             <a href="#problem" className="hover:text-ink">The problem</a>
             <a href="#pillars" className="hover:text-ink">Three pillars</a>
             <a href="#line" className="hover:text-ink">The line</a>
             <a href="#demo" className="hover:text-ink">Demo guide</a>
           </nav>
-          <div className="ml-auto flex items-center gap-2.5"><ThemeToggle /><Button kind="primary" onClick={() => go('twin')}>Open the live twin <ArrowRight size={16} /></Button></div>
+          <div className="ml-auto flex items-center gap-2.5">
+            <ThemeToggle />
+            <Button kind="primary" className="max-sm:!hidden" onClick={() => go('twin')}>Open the live twin <ArrowRight size={16} /></Button>
+            <button onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label={menu ? 'Close menu' : 'Open menu'}
+              className="grid h-9 w-9 place-items-center rounded-md border border-line text-ink hover:bg-surface-2 md:hidden">
+              {menu ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
         </div>
+        {menu && (
+          <nav className="rise border-t border-line px-6 pb-4 pt-2 md:hidden" onClick={() => setMenu(false)}>
+            {[['#problem', 'The problem'], ['#pillars', 'Three pillars'], ['#line', 'The line'], ['#demo', 'Demo guide']].map(([h, t]) => (
+              <a key={h} href={h} className="block rounded-md px-2 py-2.5 text-[15.5px] text-ink hover:bg-surface-2">{t}</a>
+            ))}
+            <Button kind="primary" className="mt-2 w-full" onClick={() => go('twin')}>Open the live twin <ArrowRight size={16} /></Button>
+          </nav>
+        )}
       </header>
 
       {/* hero */}

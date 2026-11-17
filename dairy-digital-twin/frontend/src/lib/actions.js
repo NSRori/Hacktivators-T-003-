@@ -1,4 +1,4 @@
-import { fmt, UNIT_INFO } from './twin'
+import { fmt, hijackAlert, repairTicket, UNIT_INFO } from './twin'
 
 export const openTicket = (tickets, unit) => tickets.find((t) => t.unit === unit && ['OPEN', 'DISPATCHED', 'FAILED'].includes(t.status))
 export const chillerSpoofed = (f) => f.engine.pillar3.checks.chiller.diff_c > 1.5 && !f.chiller_failover
@@ -20,6 +20,11 @@ export function actionsFor(id, f) {
   const ft = id === 'homogenizer' && openTicket(tickets, 'homogenizer')
   if (ft && ft.status === 'OPEN') acts.push({ label: 'Run cleaning flush', path: `/maintenance/${ft.id}/dispatch`, kind: 'primary' })
   if (id === 'silo' && chillerSpoofed(f)) acts.push({ label: 'Switch to backup chiller', path: '/chiller/failover', kind: 'crit' })
+  const rt = repairTicket(f, id)
+  if (rt && ['OPEN', 'FAILED'].includes(rt.status)) acts.push({ label: 'Send repair crew', path: `/maintenance/${rt.id}/dispatch`, kind: 'primary' })
+  if (!id.startsWith('pasteurizer') && hijackAlert(f, id) && !f.engine.pillar3.blocked_ips.includes(hijackAlert(f, id).src)) {
+    acts.push({ label: 'Block the attacker', path: `/contain/${id}`, kind: 'crit' })
+  }
   return acts
 }
 
@@ -42,6 +47,13 @@ export function attention(f, mode) {
     else if (underAttack(f, id)) items.push({ key: id, status: 'CRITICAL', text: `${UNIT_INFO[id].name} is under attack`, act: { label: 'Isolate it', path: `/isolate/${id}` } })
   }
   if (chillerSpoofed(f)) items.push({ key: 'chiller', status: 'CRITICAL', text: 'Silo thermometer is being faked', act: { label: 'Switch to backup chiller', path: '/chiller/failover' } })
+  for (const id of Object.keys(UNIT_INFO)) {
+    const rt = repairTicket(f, id)
+    if (rt?.status === 'OPEN') items.push({ key: `r-${id}`, status: rt.priority === 'CRITICAL' ? 'CRITICAL' : 'WARN', text: `${UNIT_INFO[id].name} needs a repair`, act: { label: 'Send repair crew', path: `/maintenance/${rt.id}/dispatch` } })
+    if (rt?.status === 'DISPATCHED') items.push({ key: `r-${id}`, status: 'MAINT', text: `Repair crew at the ${UNIT_INFO[id].name}`, act: null })
+    const h = !id.startsWith('pasteurizer') && hijackAlert(f, id)
+    if (h && !f.engine.pillar3.blocked_ips.includes(h.src)) items.push({ key: `h-${id}`, status: 'CRITICAL', text: `${UNIT_INFO[id].name} PLC hijacked`, act: { label: 'Block the attacker', path: `/contain/${id}` } })
+  }
   return items
 }
 

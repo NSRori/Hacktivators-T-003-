@@ -1,4 +1,4 @@
-import { fmt, LABEL } from './twin'
+import { fmt, hijackAlert, LABEL, repairTicket, UNIT_INFO } from './twin'
 import { chillerSpoofed, openTicket } from './actions'
 
 /* The problem statement, told as it happens. Four chronological steps for whatever scenario is running:
@@ -43,6 +43,24 @@ function trace(f) {
       if (!(c.diff_c > 1.5) && !alert) return null
       return { root: 'Silo thermometer', text: c.diff_c > 1.5 ? `Thermometer frozen at ${fmt(c.reported_c, 1)} °C, inlet sensors read ${fmt(c.inlet_c, 1)} °C` : 'Unauthorized write to the chiller controller', bad: c.diff_c > 1.5 }
     }
+    case 'leak': {
+      const t = f.scenario_target
+      const miss = f.engine.pillar1.mass_balance?.[t]
+      if (!repairTicket(f, t) && f.engine.units[t]?.status === 'OK') return null
+      return { text: `Mass balance: about ${fmt(miss > 0 ? miss : null)} L/min of milk missing at the ${UNIT_INFO[t]?.name}`, bad: true }
+    }
+    case 'cyber_takeover': {
+      const t = f.scenario_target
+      const a = hijackAlert(f, t)
+      if (!a) return null
+      return { text: `Rogue writes from ${a.src} to the ${UNIT_INFO[t]?.name} PLC (${t === 'silo' || t === 'surge_tank' ? 'drain valve' : 'speed set-point'})`, bad: !f.engine.pillar3.blocked_ips.includes(a.src) }
+    }
+    case 'motor_trip': {
+      const t = f.scenario_target
+      if (!repairTicket(f, t) && f.engine.units[t]?.status === 'OK') return null
+      const n = f.engine.pillar1.cascade.filter((x) => x.from === t).length
+      return { text: `${UNIT_INFO[t]?.name} stopped${n ? `: ${n} stage${n > 1 ? 's' : ''} downstream lose flow` : ''}`, bad: false }
+    }
     default:
       return null
   }
@@ -71,6 +89,20 @@ function respond(f, mode) {
       if (f.chiller_failover) return { state: 'done', text: 'Backup chiller engaged, milk cooling back to 4 °C' }
       if (chillerSpoofed(f)) return { state: f.kpi.at_risk_l > 0 ? 'fail' : 'wait', text: f.kpi.at_risk_l > 0 ? `${fmt(f.kpi.at_risk_l)} L left the silo too warm: switch chillers` : 'Switch to the backup chiller' }
       return { state: 'wait', text: mode?.auto_isolate ? 'Auto-Isolate armed' : 'Auto-Isolate is off' }
+    case 'leak':
+    case 'motor_trip': {
+      const tk = repairTicket(f, f.scenario_target)
+      if (tk?.status === 'RESOLVED') return { state: 'done', text: 'Repaired, flow back to normal' }
+      if (tk?.status === 'DISPATCHED') return { state: 'done', text: `Repair crew dispatched${tk.auto ? ' automatically' : ''}` }
+      if (tk) return { state: 'wait', text: mode?.auto_sync ? 'Auto-Sync is sending the crew' : 'Send the repair crew (Auto-Sync is off)' }
+      return { state: 'wait', text: '' }
+    }
+    case 'cyber_takeover': {
+      const a = hijackAlert(f, f.scenario_target)
+      if (a && f.engine.pillar3.blocked_ips.includes(a.src)) return { state: 'done', text: 'Attacker blocked, last good settings restored' }
+      if (a) return { state: mode?.auto_isolate ? 'wait' : 'fail', text: mode?.auto_isolate ? 'Auto-Isolate is blocking the attacker' : 'Block the attacker: Auto-Isolate is off' }
+      return { state: 'wait', text: mode?.auto_isolate ? 'Auto-Isolate armed' : 'Auto-Isolate is off' }
+    }
     default:
       return { state: 'wait', text: '' }
   }

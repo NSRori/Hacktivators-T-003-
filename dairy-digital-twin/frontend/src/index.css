@@ -173,13 +173,41 @@ html.theme-swap, html.theme-swap *, html.theme-swap *::before, html.theme-swap *
   transition: background-color .35s ease, border-color .35s ease, color .35s ease, fill .35s ease, stroke .35s ease, box-shadow .35s ease !important;
 }
 
+/* ---------- loading states ---------- */
+/* first-load splash (App.jsx): brand mark that breathes + a filling bar, fades out after ~1.2 s */
+.splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--color-bg);
+  transition: opacity .3s ease; }
+.splash-out { opacity: 0; pointer-events: none; }
+.splash-mark { animation: breathe 1.1s ease-in-out infinite; filter: drop-shadow(0 10px 30px rgb(0 145 211 / .45)); }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.splash-bar { width: 160px; height: 3px; border-radius: 9px; overflow: hidden; background: var(--color-line-2); }
+.splash-bar span { display: block; height: 100%; width: 100%; background: var(--color-brand); transform-origin: left;
+  animation: fill-bar 1s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes fill-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* skeleton cards while waiting for the first frame */
+.skeleton { border-radius: var(--radius-card); border: 1px solid var(--color-line); background:
+  linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-2) 50%, var(--color-surface) 100%) 0 0 / 200% 100%;
+  animation: shimmer 1.4s linear infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+/* a button waiting for the server: label hidden, spinner shown, clicks blocked */
+button[data-loading] { position: relative; color: transparent !important; pointer-events: none; }
+button[data-loading] > * { visibility: hidden; }
+button[data-loading]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
+  border-radius: 50%; border: 2px solid var(--color-ink-3); border-top-color: var(--color-accent); visibility: visible;
+  animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* page change: a quick fade-in (under 400 ms) */
+.page-in { animation: rise .32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
 /* press feedback on every button */
 button { transition: transform .12s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
 button:not(:disabled):active { transform: scale(.965); }
 
 @media (prefers-reduced-motion: reduce) {
   .flow-dash, .live-dot, .rise, .crit-outline, .bd-fields i, .bd-scan, .focus-card, .focus-backdrop, .dock,
-  .tank-wave, .cascade-ring, .fx, .shake, .home-ring, .step-scan { animation: none !important; }
+  .tank-wave, .cascade-ring, .fx, .shake, .home-ring, .step-scan, .splash-mark, .skeleton, .page-in { animation: none !important; }
+  .splash-bar span { animation: none !important; }
+  html.theme-swap, html.theme-swap * { transition: none !important; }
   .scribble { animation: none !important; stroke-dashoffset: 0; }
   button:not(:disabled):active { transform: none; }
 }

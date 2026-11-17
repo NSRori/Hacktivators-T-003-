@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, CheckCircle2, Moon, Pause, Play, Presentation, RotateCcw, SlidersHorizontal, Sun, TriangleAlert, Unplug, Volume2, VolumeX, XCircle } from 'lucide-react'
 import { toggleTheme, useTheme } from '../lib/theme'
-import { caption, clock, SCENARIOS, TABS } from '../lib/twin'
+import { caption, clock, FAULTS, scenarioTitle, SCENARIOS, TABS, UNIT_INFO, UNITS } from '../lib/twin'
 import { attention } from '../lib/actions'
 import { mission } from '../lib/mission'
 import { setMuted, sfx, useMuted } from '../lib/feel'
@@ -157,6 +157,7 @@ export function ScenarioBar({ frame, mode, call }) {
             </div>
           )
         })}
+        <FaultPicker frame={frame} call={call} />
         <div className="ml-auto flex flex-wrap items-center gap-1">
           <Switch on={!!mode?.auto_sync} onChange={(v) => call('/auto-sync', { enabled: v })} label="Auto-Sync" k="A"
             hint="Pillar 1 self-balancing: throttles intake, paces the filler, rebalances A/B and cleans a clogging valve" />
@@ -231,18 +232,43 @@ function LegacyClock({ legacy }) {
   )
 }
 
+/** Any fault on any unit: pick a type and a target, then inject. */
+function FaultPicker({ frame, call }) {
+  const [type, setType] = useState('leak')
+  const [unit, setUnit] = useState('silo')
+  const live = frame && FAULTS.some((x) => x.key === frame.scenario)
+  const since = live ? frame.tick - frame.scenario_tick : null
+  const sel = 'h-[34px] cursor-pointer border-l border-line bg-surface-2 px-2 text-[14px] text-ink outline-none focus-visible:bg-surface-3'
+  return (
+    <div className={`flex items-center overflow-hidden rounded-md border ${live ? 'border-brand shadow-[0_0_0_3px_rgb(0_145_211/0.2)]' : 'border-line'} bg-surface-2`}
+      title={FAULTS.find((x) => x.key === type)?.blurb}>
+      <span className="px-2.5 text-[13px] font-semibold text-ink-2">Any unit</span>
+      <select aria-label="Fault type" value={type} onChange={(e) => setType(e.target.value)} className={sel}>
+        {FAULTS.map((x) => <option key={x.key} value={x.key}>{x.title}</option>)}
+      </select>
+      <select aria-label="Target unit" value={unit} onChange={(e) => setUnit(e.target.value)} className={sel}>
+        {UNITS.map((u) => <option key={u} value={u}>{UNIT_INFO[u].name}</option>)}
+      </select>
+      <button onClick={() => call(`/scenario/${type}?target=${unit}`)}
+        className="h-[34px] border-l border-line px-3 text-[14px] font-semibold text-accent hover:bg-surface-3">
+        Inject{live && <span className="num ml-1.5 text-[13px] font-normal text-ink-2">· T+{since} min</span>}
+      </button>
+    </div>
+  )
+}
+
 /** One sentence for the audience, the four-step story, and any action the operator should take now. */
 export function CaptionStrip({ frame, mode, call }) {
   const todo = attention(frame, mode)
   const m = mission(frame, mode)
-  const scn = SCENARIOS.find((s) => s.key === frame.scenario)
+  const title = scenarioTitle(frame)
   return (
     <section className="panel overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 pb-3.5 pt-4">
         <div className="min-w-[280px] flex-1">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-accent">
             {m.live && <span className={`live-dot h-2 w-2 rounded-full ${m.contained ? 'bg-ok' : 'bg-crit'}`} />}
-            {m.live ? `Incident in progress · ${scn?.long}` : 'The problem we solve'}
+            {m.live ? `Incident in progress · ${title}` : 'The problem we solve'}
           </div>
           <p className="mt-1 text-[18.5px] font-medium leading-snug text-ink">
             {m.live ? caption(frame, mode)

@@ -139,18 +139,28 @@ function Shell({ data, children, handles }) {
 
 const h = (type, pos, id) => <Handle key={id + type} type={type} position={pos} id={id} />
 
+/* tanks: the drawing shows what the independent load cells weigh, so a drained tank looks drained even when its
+   PLC replays an old level; the gap is called out under the numbers */
+const weighed = (s, cap) => (typeof s.load_cell_l === 'number' ? (100 * s.load_cell_l) / cap : s.level_pct)
+const Faked = ({ s }) => (typeof s.load_cell_l === 'number' && Math.abs(s.level_l - s.load_cell_l) > 300 ? (
+  <div className="mt-2 rounded border-l-4 border-crit bg-crit-2 px-2 py-1 text-[13px] leading-snug text-ink">
+    Load cells weigh <b className="num"><Num value={s.load_cell_l} int /> L</b>. The level reading is fake.
+  </div>
+) : null)
+
 function SiloNode({ data }) {
   const s = data.s
   return (
     <Shell data={data} handles={[h('source', Position.Right, 'r')]}>
       <div className="flex items-center gap-3">
-        <Vessel level={s.level_pct} />
+        <Vessel level={weighed(s, 24000)} />
         <div className="space-y-1.5">
           <Big n={s.level_pct} unit="% full" tone={s.level_pct > 95 ? 'text-crit' : 'text-ink'} />
           <Line><Num value={s.level_l} int /> L of 24,000</Line>
           <Line tone={s.temp_c > 6 ? 'text-crit font-semibold' : 'text-ink-2'}>Temperature {fmt(s.temp_c, 1)} °C</Line>
         </div>
       </div>
+      <Faked s={s} />
     </Shell>
   )
 }
@@ -160,7 +170,7 @@ function SurgeNode({ data }) {
   return (
     <Shell data={data} handles={[h('target', Position.Top, 't'), h('source', Position.Left, 'l')]}>
       <div className="flex items-center gap-3">
-        <Vessel level={s.level_pct} />
+        <Vessel level={weighed(s, 6000)} />
         <div className="space-y-1.5">
           <Big n={s.level_pct} unit="% full" tone={s.level_pct < 10 ? 'text-crit' : 'text-ink'} />
           <Line><Num value={s.level_l} int /> L of 6,000</Line>
@@ -169,6 +179,7 @@ function SurgeNode({ data }) {
               : s.level_pct < 8 ? 'Empty: filler starving' : s.level_pct > 92 ? 'Nearly full' : 'Holding steady'}</Line>
         </div>
       </div>
+      <Faked s={s} />
     </Shell>
   )
 }
@@ -379,8 +390,14 @@ export default function PlantFloor({ frame, notify, className = '' }) {
   const [pinned, setPinned] = useState(null)
 
   const act = useCallback(async (a) => {
-    const r = await post(a.path, a.body)
-    notify(r.message || (r.ok ? 'Done' : 'Failed'), r.ok !== false)
+    const btn = document.activeElement?.closest?.('button')
+    if (btn) { btn.setAttribute('data-loading', ''); btn.disabled = true }
+    try {
+      const r = await post(a.path, a.body)
+      notify(r.message || (r.ok ? 'Done' : 'Failed'), r.ok !== false)
+    } finally {
+      if (btn) { btn.removeAttribute('data-loading'); btn.disabled = false }
+    }
   }, [notify])
 
   const { view, edges } = useMemo(() => {

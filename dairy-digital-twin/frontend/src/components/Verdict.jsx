@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { fmt, fmtInt, LABEL, LEGACY, SCENARIOS, TONE, UNITS } from '../lib/twin'
+import { fmt, fmtInt, LABEL, LEGACY, scenarioTitle, TONE, UNITS } from '../lib/twin'
 import { Num, Panel, STATUS_ICON, StatusBadge } from './ui'
 
 const RANK = { OK: 0, WATCH: 1, MAINT: 1, WARN: 2, QUARANTINED: 2, CRITICAL: 3 }
@@ -129,11 +129,11 @@ export function KpiRow({ frame, className = '' }) {
   const k = frame.kpi
   const ret = k.retention_pct
   const sret = k.scenario_retention_pct
-  const lost = k.wasted_l + k.unsafe_l + k.at_risk_l
+  const lost = k.wasted_l + k.unsafe_l + k.at_risk_l + (k.lost_l || 0)
   const tiles = [
     { label: 'Bottling now', v: <Num value={k.throughput_lpm} />, u: 'L/min', sub: `${fmt(ret)} % of target`, tone: ret >= 95 ? 'text-ink' : ret >= 80 ? 'text-warn-ink' : 'text-crit' },
     { label: 'Output kept', v: sret === null ? '—' : <Num value={sret} d={1} />, u: sret === null ? '' : '%', sub: sret === null ? 'no scenario yet' : 'since scenario start', tone: sret === null || sret >= 95 ? 'text-ink' : sret >= 85 ? 'text-warn-ink' : 'text-crit' },
-    { label: 'Milk lost or unsafe', v: <Num value={lost} int />, u: 'L', sub: lost ? `${fmtInt(k.wasted_l)} spilled · ${fmtInt(k.unsafe_l + k.at_risk_l)} unsafe` : 'none', tone: lost ? 'text-crit' : 'text-ink' },
+    { label: 'Milk lost or unsafe', v: <Num value={lost} int />, u: 'L', sub: lost ? `${fmtInt(k.wasted_l + (k.lost_l || 0))} spilled or leaked · ${fmtInt(k.unsafe_l + k.at_risk_l)} unsafe` : 'none', tone: lost ? 'text-crit' : 'text-ink' },
     { label: 'Filler stopped', v: <Num value={k.starved_min} />, u: 'min', sub: k.starved_min ? 'waiting for milk' : 'never ran dry', tone: k.starved_min ? 'text-warn-ink' : 'text-ink' },
   ]
   // 4 across when the card is wide enough, otherwise 2 x 2: the tiles never squeeze their text into the next card
@@ -157,7 +157,7 @@ const SRC = { pillar1: ['Sync', 'bg-accent'], pillar2: ['Maintenance', 'bg-warn'
 
 export function IncidentStory({ frame, max = 12, className = '' }) {
   const st = frame.scenario_tick
-  const scn = SCENARIOS.find((s) => s.key === frame.scenario)
+  const title = scenarioTitle(frame)
   let items = []
   if (st !== null && st !== undefined) {
     const seen = new Set()
@@ -172,8 +172,8 @@ export function IncidentStory({ frame, max = 12, className = '' }) {
   }
   return (
     <Panel wid="story" title="What happened, step by step" zoom="fill" className={className} bodyClass="!p-0 flex flex-col"
-      right={scn && <span className="num text-[13px] text-ink-2">{scn.long} · T+{frame.tick - st} min</span>}>
-      {!scn ? (
+      right={title && <span className="num text-[13px] text-ink-2">{title} · T+{frame.tick - st} min</span>}>
+      {!title ? (
         <p className="px-5 py-4 text-[14.5px] text-ink-2">Nothing to report. Start a scenario and each pillar’s findings and actions appear here as they happen.</p>
       ) : <StoryList items={items} st={st} />}
     </Panel>

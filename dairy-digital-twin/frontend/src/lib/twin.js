@@ -160,6 +160,30 @@ export const SCENARIOS = [
     tip: 'Turn Auto-Isolate off to watch the engine catch it by cross-checking a second sensor.' },
 ]
 
+/** Faults that can be injected on ANY unit (pick a type and a target in the scenario bar). */
+export const FAULTS = [
+  { key: 'leak', title: 'Leak', blurb: 'Milk escapes from the chosen unit: a cracked tank wall or a failing seal. Every meter still reads normal on its own; only the mass balance (litres in - litres out - change in level) shows the missing milk.' },
+  { key: 'cyber_takeover', title: 'Cyber takeover', blurb: 'An attacker takes over the chosen unit\u2019s PLC. A tank\u2019s drain valve opens while the PLC keeps reporting the old level; a pump or drive is forced down to 30 % speed.' },
+  { key: 'motor_trip', title: 'Motor trip', blurb: 'The unit\u2019s drive (or a tank\u2019s outlet pump) jams and stops. Loud, so the legacy SCADA sees it too; the engine shows what it hits next and sends the repair crew.' },
+]
+
+/** Human title of whatever is running: a preset scenario, or "Leak on Surge Tank". */
+export function scenarioTitle(f) {
+  if (!f?.scenario) return null
+  const preset = SCENARIOS.find((s) => s.key === f.scenario)
+  if (preset) return preset.long
+  const fault = FAULTS.find((x) => x.key === f.scenario)
+  const name = UNIT_INFO[f.scenario_target]?.name || f.scenario_target
+  return fault ? `${fault.title} on ${name}` : f.scenario
+}
+
+export const repairTicket = (f, unit) => {
+  const all = f.engine.pillar2.tickets.filter((t) => t.unit === `repair:${unit}` && t.created_tick >= (f.scenario_tick ?? 0))
+  return all.find((t) => ['OPEN', 'DISPATCHED', 'FAILED'].includes(t.status)) || all[0] || null
+}
+export const hijackAlert = (f, unit) => f.engine.pillar3.alerts.find((a) => a.unit === unit && a.type === 'UNAUTHORIZED_WRITE'
+  && a.tick >= (f.scenario_tick ?? 0))
+
 export const TABS = [
   { key: 'twin', label: 'Live twin' },
   { key: 'sync', label: 'Production sync', pillar: 1 },
@@ -200,6 +224,34 @@ export function caption(f, mode) {
     case 'chiller_spoof':
       if (f.chiller_failover) return 'The backup chiller is engaged and the milk is cooling back to 4 °C.'
       return `The silo thermometer is frozen at 4 °C by an attacker. Inlet sensors read ${fmt(f.engine.pillar3.checks.chiller.inlet_c, 1)} °C.`
+    case 'leak': {
+      const t = f.scenario_target
+      const n = UNIT_INFO[t]?.name
+      const tk = repairTicket(f, t)
+      const miss = f.engine.pillar1.mass_balance?.[t]
+      if (tk?.status === 'RESOLVED') return `${n} has been repaired. Its mass balance closes again.`
+      if (tk?.status === 'DISPATCHED') return `A repair crew is fixing the leak on ${n}.`
+      if (f.engine.units[t]?.status !== 'OK') return `${n} is leaking: about ${fmt(miss)} L/min goes missing between its meters, yet every reading on its own looks normal.`
+      return `${n} has started to leak. No single sensor is out of its limits.`
+    }
+    case 'cyber_takeover': {
+      const t = f.scenario_target
+      const n = UNIT_INFO[t]?.name
+      const tank = t === 'silo' || t === 'surge_tank'
+      if (f.engine.pillar3.blocked_ips.length) return `The attacker on the ${n} PLC has been blocked and its last good settings restored.`
+      if (hijackAlert(f, t)) return tank
+        ? `The ${n} PLC has been hijacked: its drain valve is open, yet it still reports ${fmt(s[t].level_pct)} % full.`
+        : `The ${n} PLC has been hijacked and its speed forced down to 30 %.`
+      return 'An unknown host is scanning the plant network.'
+    }
+    case 'motor_trip': {
+      const t = f.scenario_target
+      const n = UNIT_INFO[t]?.name
+      const tk = repairTicket(f, t)
+      if (tk?.status === 'RESOLVED') return `${n} is running again after the repair.`
+      if (tk?.status === 'DISPATCHED') return `${n} has stopped. A repair crew is on the way while the engine shows what it will hit next.`
+      return `${n} has stopped dead. Everything downstream is about to run dry.`
+    }
     default:
       return 'Normal operation: 800 L/min bottling, every buffer near 50 %, all stages inside their limits.'
   }

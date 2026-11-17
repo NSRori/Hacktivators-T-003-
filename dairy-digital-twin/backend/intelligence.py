@@ -485,6 +485,16 @@ class ThreePillarEngine:
                                 f"downstream tank inflow {down:.0f} vs reported total {tot:.0f}", dedupe=15)
                 if a:
                     crit.append(a)
+        for tank in ("silo", "surge_tank"):              # level reading vs independent load cells
+            gap = s[tank]["level_l"] - s[tank]["load_cell_l"]
+            checks[tank] = {"reported_l": s[tank]["level_l"], "load_cell_l": s[tank]["load_cell_l"], "gap_l": gap}
+            self.consec[("lvl", tank)] = self.consec[("lvl", tank)] + 1 if abs(gap) > 300 else 0
+            if self.consec[("lvl", tank)] >= 2:
+                a = self._alert(("lvl", tank), "CRITICAL", "TELEMETRY_SPOOF", tank,
+                                f"{LABEL[tank]} PLC reports {s[tank]['level_l']:,} L but its load cells weigh "
+                                f"{s[tank]['load_cell_l']:,} L - level reading faked", dedupe=15)
+                if a:
+                    crit.append(a)
         inlet = (s["pasteurizer_a"]["inlet_temp_c"] + s["pasteurizer_b"]["inlet_temp_c"]) / 2
         diff = inlet - s["silo"]["temp_c"]
         checks["chiller"] = {"reported_c": s["silo"]["temp_c"], "inlet_c": round(inlet, 2), "diff_c": round(diff, 2)}
