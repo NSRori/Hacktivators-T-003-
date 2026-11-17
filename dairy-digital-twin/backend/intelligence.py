@@ -263,6 +263,9 @@ class ThreePillarEngine:
         recent = [a for a in self.alerts if tel["tick"] - a["tick"] <= 15]
         if recent:
             threat = "CRITICAL" if any(a["severity"] == "CRITICAL" for a in recent) else "ELEVATED"
+        if (self.consec["chill"] >= 3 and not tel["chiller_failover"]) or any(
+                self.consec[(k, pu)] >= 2 for k in ("over", "spoof") for pu in ("pasteurizer_a", "pasteurizer_b")):
+            threat = "CRITICAL"             # attack still physically in progress
 
         return {
             "legacy": legacy,
@@ -544,6 +547,14 @@ class ThreePillarEngine:
                 bump("silo", "CRITICAL", "chiller sensor spoofed")
         if tel["chiller_failover"]:
             bump("silo", "WATCH", "backup chiller engaged")
+        # persistent physics cross-check failures keep the unit red between (de-duplicated) alerts
+        if self.consec["chill"] >= 3 and not tel["chiller_failover"]:
+            bump("silo", "CRITICAL", "chiller sensor spoofed - milk warming unseen")
+        for pu in ("pasteurizer_a", "pasteurizer_b"):
+            if self.consec[("over", pu)] >= 2:
+                bump(pu, "CRITICAL", "overspeed - milk below 72 °C")
+            if self.consec[("spoof", pu)] >= 2:
+                bump(pu, "CRITICAL", "telemetry spoof - PLC values untrusted")
         for pm in PUMPS:
             unit, r, tk = PUMP_UNIT[pm], rul[pm], self._open(pm)
             if tel["pumps"][pm]["failed"]:

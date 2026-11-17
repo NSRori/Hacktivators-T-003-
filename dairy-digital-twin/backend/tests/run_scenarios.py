@@ -153,6 +153,11 @@ for iso in (False, True):
           f"alerts {sorted({a['type'] for a in b.alerts})}")
     if not iso:
         check("chiller spoof detected by cross-check", "CHILLER_SPOOF" in {a["type"] for a in b.alerts})
+        silo_after = [f["out"]["engine"]["units"]["silo"]["status"] for f in fr[30 + 40:]]
+        check("silo stays CRITICAL while spoof persists", set(silo_after) == {"CRITICAL"}, f"({sorted(set(silo_after))})")
+        check("legacy silo stays GREEN (spoofed 4 °C)", o["legacy"]["units"]["silo"]["status"] == "GREEN")
+    else:
+        check("ON: no warm milk released", o["kpi"]["at_risk_l"] == 0)
 
 print("\n=== DETERMINISM ===")
 a = run("drift", ticks=80)[2]
