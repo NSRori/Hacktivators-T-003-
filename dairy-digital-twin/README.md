@@ -103,6 +103,16 @@ cd backend
 ..\.venv\Scripts\python tests\run_scenarios.py
 ```
 
+UI check in headless Chrome (screenshots, overlapping-card audit, console errors). Run it with the backend on :8000
+serving a fresh `npm run build`:
+
+```powershell
+$env:W=1536; $env:H=730; python tools\ui_check.py home twin minimize zoom pages restore
+```
+
+Handing the project to a new person or AI? Start with `../PROJECT_CONTEXT.md`. It has the full context, the team's
+preferences and the open to-do list.
+
 ## Modelling assumptions (stated for judges)
 
 * 1 tick = 1 simulated minute. Physics is a simplified volume balance, not CFD. Every number is illustrative.
