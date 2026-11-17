@@ -5,6 +5,7 @@ import { AppHeader, ScenarioBar, Toast } from './components/Chrome'
 import Backdrop from './components/Backdrop'
 import { WidgetProvider } from './components/widgets'
 import { isMuted, setMuted, useClickFeel, useFeel } from './lib/feel'
+import { toggleTheme } from './lib/theme'
 import Home from './pages/Home'
 import Twin from './pages/Twin'
 import { CyberPage, LogPage, MaintPage, SyncPage } from './pages/Pillars'
@@ -45,6 +46,7 @@ export default function App() {
       else if (k === 'i' && mode) call('/auto-isolate', { enabled: !mode.auto_isolate })
       else if (k === 'p') setPresenter((p) => !p)
       else if (k === 'm') setMuted(!isMuted())
+      else if (k === 't') toggleTheme()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

@@ -3,15 +3,15 @@ import { Area, AreaChart, CartesianGrid, ComposedChart, Line, LineChart, Referen
 import { Panel } from './ui'
 import { useZoomed } from './widgets'
 
-const INK = '#F2F4F6'
-const INK2 = '#B5BCC4'
-const LINE = '#1E1E20'
-const ACCENT = '#4FB3EA'
-const MARK = { ink: '#B5BCC4', accent: '#4FB3EA', legacy: '#AEB8C0', warn: '#F0BC4E', iso: '#A07AD9' }
+const INK = 'var(--color-ink)'
+const INK2 = 'var(--color-ink-2)'
+const LINE = 'var(--color-line-2)'
+const ACCENT = 'var(--color-accent)'
+const MARK = { ink: 'var(--color-ink-2)', accent: 'var(--color-accent)', legacy: 'var(--color-legacy)', warn: 'var(--color-warn-ink)', iso: 'var(--color-iso)' }
 
 const axis = { stroke: INK2, fontSize: 12.5, tickLine: false, axisLine: { stroke: LINE } }
 const tip = (
-  <Tooltip contentStyle={{ background: '#0D0D0E', border: '1px solid #2B2B2D', boxShadow: '0 14px 30px -12px rgba(0,0,0,.8)', borderRadius: 6, fontSize: 13, color: INK }}
+  <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-line)', boxShadow: 'var(--shadow-pop)', borderRadius: 6, fontSize: 13, color: INK }}
     labelFormatter={(t) => `minute ${t}`} isAnimationActive={false} />
 )
 const margin = { top: 22, right: 12, left: -8, bottom: 0 }
@@ -104,22 +104,22 @@ export const ThroughputChart = ({ h, marks = [], wid }) => (
 )
 
 export const LevelsChart = ({ h, marks = [], wid }) => (
-  <ChartCard wid={wid} title="Buffer levels" sub="How full the raw silo and the surge tank are. Shaded band is the healthy 35-65 %." legend={[['#8CAAD2', 'raw silo'], [ACCENT, 'surge tank']]}>
+  <ChartCard wid={wid} title="Buffer levels" sub="How full the raw silo and the surge tank are. Shaded band is the healthy 35-65 %." legend={[['var(--ch-silo)', 'raw silo'], [ACCENT, 'surge tank']]}>
     {(pw) => (<LineChart data={h} margin={margin}>
       <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[0, 100]} unit="%" />{tip}
       <ReferenceArea y1={35} y2={65} fill={ACCENT} fillOpacity={0.05} />
-      {ln('silo', '#8CAAD2', { name: 'silo %' })}{ln('surge', ACCENT, { name: 'surge tank %' })}
+      {ln('silo', 'var(--ch-silo)', { name: 'silo %' })}{ln('surge', ACCENT, { name: 'surge tank %' })}
       {marksFor(marks, h, pw)}
     </LineChart>)}
   </ChartCard>
 )
 
 export const PressureChart = ({ h, marks = [], wid }) => (
-  <ChartCard wid={wid} title="Homogenizer pressure" sub="The clogging valve pushes pressure up, but never out of the legacy “OK” band (green)." legend={[['#F0BC4E', 'pressure'], ['#3DB07E', 'legacy OK band']]}>
+  <ChartCard wid={wid} title="Homogenizer pressure" sub="The clogging valve pushes pressure up, but never out of the legacy “OK” band (green)." legend={[['var(--color-warn-ink)', 'pressure'], ['var(--color-ok)', 'legacy OK band']]}>
     {(pw) => (<LineChart data={h} margin={{ ...margin, left: 4 }}>
       <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[1750, 2300]} allowDataOverflow />{tip}
-      <ReferenceArea y1={1800} y2={2250} fill="#3DB07E" fillOpacity={0.08} />
-      {ln('pressure', '#F0BC4E', { name: 'pressure PSI', strokeWidth: 1.8 })}
+      <ReferenceArea y1={1800} y2={2250} fill="var(--color-ok)" fillOpacity={0.08} />
+      {ln('pressure', 'var(--color-warn-ink)', { name: 'pressure PSI', strokeWidth: 1.8 })}
       {marksFor(marks, h, pw)}
     </LineChart>)}
   </ChartCard>
@@ -145,12 +145,12 @@ export function VibrationChart({ h, marks = [], height = 230, wid }) {
   }, [h])
   return (
     <ChartCard wid={wid} title="Pump vibration" sub="8-minute rolling mean in mm/s. Legacy alarms at 4.5; the seal fails at 7.1." height={height}
-      legend={[['#EC8A5E', 'homogenizer pump'], [ACCENT, 'pasteurizer A pump'], ['#E3A41A', 'legacy alarm 4.5', true], ['#E5604F', 'seal fails 7.1', true]]}>
+      legend={[['var(--ch-orange)', 'homogenizer pump'], [ACCENT, 'pasteurizer A pump'], ['var(--color-warn)', 'legacy alarm 4.5', true], ['var(--color-crit)', 'seal fails 7.1', true]]}>
       {(pw) => (<LineChart data={data} margin={margin}>
         <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[0, 8]} />{tip}
-        <ReferenceLine y={4.5} stroke="#E3A41A" strokeDasharray="5 4" />
-        <ReferenceLine y={7.1} stroke="#E5604F" strokeDasharray="5 4" />
-        {ln('vib_h', '#EC8A5E', { name: 'homogenizer pump mm/s' })}
+        <ReferenceLine y={4.5} stroke="var(--color-warn)" strokeDasharray="5 4" />
+        <ReferenceLine y={7.1} stroke="var(--color-crit)" strokeDasharray="5 4" />
+        {ln('vib_h', 'var(--ch-orange)', { name: 'homogenizer pump mm/s' })}
         {ln('vib_a', ACCENT, { name: 'pasteurizer A pump mm/s' })}
         {marksFor(marks, data, pw)}
       </LineChart>)}
@@ -159,11 +159,11 @@ export function VibrationChart({ h, marks = [], height = 230, wid }) {
 }
 
 export const AnomalyChart = ({ h, marks = [], wid }) => (
-  <ChartCard wid={wid} title="ML anomaly score" sub="IsolationForest trained on healthy operation. Above 0.6 for 3 minutes counts as an anomaly." legend={[['#A07AD9', 'anomaly score']]} height={200}>
+  <ChartCard wid={wid} title="ML anomaly score" sub="IsolationForest trained on healthy operation. Above 0.6 for 3 minutes counts as an anomaly." legend={[['var(--color-iso)', 'anomaly score']]} height={200}>
     {(pw) => (<ComposedChart data={h} margin={margin}>
       <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[0, 1]} />{tip}
-      <ReferenceLine y={0.6} stroke="#E5604F" strokeDasharray="5 4" />
-      <Area type="stepAfter" dataKey="anomaly" stroke="#A07AD9" fill="#A07AD9" fillOpacity={0.08} strokeWidth={1.8} isAnimationActive={false} name="anomaly score" />
+      <ReferenceLine y={0.6} stroke="var(--color-crit)" strokeDasharray="5 4" />
+      <Area type="stepAfter" dataKey="anomaly" stroke="var(--color-iso)" fill="var(--color-iso)" fillOpacity={0.08} strokeWidth={1.8} isAnimationActive={false} name="anomaly score" />
       {marksFor(marks, h, pw)}
     </ComposedChart>)}
   </ChartCard>
@@ -171,10 +171,10 @@ export const AnomalyChart = ({ h, marks = [], wid }) => (
 
 export const SpoofChart = ({ h, marks = [], wid }) => (
   <ChartCard wid={wid} title="Pasteurizer A: PLC reading vs physics" sub="What the PLC reports, against the flow implied by the motor’s drive current."
-    legend={[[INK2, 'PLC reported', true], ['#E5604F', 'physical'], [ACCENT, 'Pasteurizer B']]}>
+    legend={[[INK2, 'PLC reported', true], ['var(--color-crit)', 'physical'], [ACCENT, 'Pasteurizer B']]}>
     {(pw) => (<LineChart data={h} margin={margin}>
       <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[0, 900]} />{tip}
-      {ln('a_physical', '#E5604F', { name: 'A physical L/min' })}
+      {ln('a_physical', 'var(--color-crit)', { name: 'A physical L/min' })}
       {ln('a_reported', INK2, { name: 'A PLC-reported L/min', strokeDasharray: '6 4' })}
       {ln('b_flow', ACCENT, { name: 'B L/min', strokeWidth: 1.6 })}
       {marksFor(marks, h, pw)}
@@ -184,11 +184,11 @@ export const SpoofChart = ({ h, marks = [], wid }) => (
 
 export const ChillerChart = ({ h, marks = [], wid }) => (
   <ChartCard wid={wid} title="Silo temperature: PLC vs inlet sensors" sub="An independent sensor at the pasteurizer inlet exposes a frozen PLC reading. Above 7 °C milk spoils."
-    legend={[[INK2, 'silo PLC', true], ['#EC8A5E', 'inlet sensors']]}>
+    legend={[[INK2, 'silo PLC', true], ['var(--ch-orange)', 'inlet sensors']]}>
     {(pw) => (<LineChart data={h} margin={margin}>
       <CartesianGrid stroke={LINE} vertical={false} />{X}<YAxis {...axis} domain={[2, 11]} unit="°" />{tip}
-      <ReferenceLine y={7} stroke="#E5604F" strokeDasharray="5 4" />
-      {ln('inlet_temp', '#EC8A5E', { name: 'inlet °C' })}
+      <ReferenceLine y={7} stroke="var(--color-crit)" strokeDasharray="5 4" />
+      {ln('inlet_temp', 'var(--ch-orange)', { name: 'inlet °C' })}
       {ln('silo_temp', INK2, { name: 'silo PLC °C', strokeDasharray: '6 4' })}
       {marksFor(marks, h, pw)}
     </LineChart>)}

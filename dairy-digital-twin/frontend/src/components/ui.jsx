@@ -139,7 +139,7 @@ export function PageHeader({ eyebrow, title, lede, right }) {
 
 export const BTN = {
   primary: 'bg-brand-deep text-white hover:bg-[#0A80C2] shadow-[0_8px_22px_-10px_rgb(0_145_211/0.9)]',
-  secondary: 'bg-surface-2 text-ink border border-line hover:bg-[#202022] hover:border-[#48484C]',
+  secondary: 'bg-surface-2 text-ink border border-line hover:bg-surface-3 hover:border-line-3',
   crit: 'bg-crit-deep text-white hover:bg-[#CC4537] shadow-[0_8px_22px_-10px_rgb(229_96_79/0.9)]',
   warn: 'bg-warn text-[#1B1405] hover:bg-[#F0B22E]',
   iso: 'bg-iso-deep text-white hover:bg-[#7C4FB8] shadow-[0_8px_22px_-10px_rgb(160_122_217/0.9)]',

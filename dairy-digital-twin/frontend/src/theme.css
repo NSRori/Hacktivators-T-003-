@@ -1,0 +1,149 @@
+/* =====================================================================================================
+   THEME: the one place every colour, font, radius and shadow in the app comes from.
+   Two modes on <html data-theme="dark|light">: dark (default) and light. lib/theme.js switches them.
+
+   Palette (team swatch): cerulean #0091D3, sky #84BEE5, periwinkle #8CAAD2, white.
+   Status colours encode status only, never decoration: ok green, warn amber, crit red, iso(lated) violet.
+   - dark:  pure black base, near-black cards, the same hues lifted a little so they keep AA contrast.
+   - light: blue-tinted page, white cards, a deep-navy header band as the darker accent.
+
+   Tailwind utilities (bg-surface, text-ink, ...) come from @theme. Values only drawn in SVG / canvas code
+   (plant floor, charts, homepage schematic) are plain variables below (--pf-*, --ch-*); components use them
+   as var(...) strings, so a theme switch repaints everything without re-rendering.
+   ===================================================================================================== */
+
+@theme {
+  /* ---- colour: dark is the default ---- */
+  --color-bg: #000000;           /* background */
+  --color-surface: #0D0D0E;      /* cards */
+  --color-surface-2: #171718;    /* inset areas, secondary buttons */
+  --color-surface-3: #202022;    /* hover */
+  --color-line: #2B2B2D;         /* borders */
+  --color-line-2: #1E1E20;       /* dividers inside cards */
+  --color-line-3: #3D3D40;       /* hover borders */
+  --color-ink: #F2F4F6;          /* text */
+  --color-ink-2: #B5BCC4;        /* secondary text (muted) */
+  --color-ink-3: #8A939C;        /* hints */
+  --color-accent: #4FB3EA;       /* primary as text / lines */
+  --color-accent-2: #0A2232;     /* primary wash */
+  --color-accent-3: #84BEE5;     /* secondary: sky */
+  --color-brand: #0091D3;        /* primary: cerulean (swatch) */
+  --color-brand-deep: #0B6FA8;   /* primary fills behind white text (AA) */
+  --color-sky: #84BEE5;
+  --color-peri: #8CAAD2;         /* accent: periwinkle */
+  --color-ok: #3DB07E;
+  --color-ok-2: #0F2A1C;
+  --color-ok-deep: #2E7D5B;
+  --color-warn: #E3A41A;
+  --color-warn-ink: #F0BC4E;
+  --color-warn-2: #33260A;
+  --color-crit: #E5604F;
+  --color-crit-2: #3A1714;
+  --color-crit-deep: #B83A2E;
+  --color-iso: #A07AD9;
+  --color-iso-2: #24183A;
+  --color-iso-deep: #6B3FA0;
+  --color-legacy: #AEB8C0;
+  --color-header: #000000;       /* app header / homepage header + footer */
+  --color-bar: #0E0E0F;          /* scenario bar */
+  --color-canvas: #050505;       /* plant floor canvas */
+
+  /* ---- type: one humanist sans, a mono for code-like readouts ---- */
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, ui-monospace, monospace;
+
+  /* ---- shape: radius + shadow scale ---- */
+  --radius-card: 12px;
+  --radius-control: 6px;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 40px -22px rgb(0 0 0 / 0.75);
+  --shadow-pop: 0 18px 44px -14px rgb(0 0 0 / 0.85);
+  --shadow-float: 0 30px 90px -24px rgb(0 0 0 / 0.9);
+}
+
+/* spacing: Tailwind's default 4 px scale (p-4 = 16 px); cards use px-5 py-4, rows gap-4. */
+
+:root {
+  /* plant floor + homepage schematic */
+  --pf-pipe: #2E2E31; --pf-steel: #7F93A6; --pf-flow: #1AA3E6; --pf-milk: #CFE6F6; --pf-particle: #CFE6F6;
+  --pf-shell: #0E0E0F; --pf-ok-tint: #24503A; --pf-dots: #262628; --pf-tank-hot: #EE8E80; --pf-tank-warm: #EFC766;
+  /* charts (series that are not a status) */
+  --ch-silo: #8CAAD2; --ch-orange: #EC8A5E;
+  /* page background */
+  --bd-base: linear-gradient(165deg, #000000 0%, #030303 38%, #060607 70%, #000000 100%);
+  --bd-f1: rgb(0 145 211 / 0.17); --bd-f1b: rgb(0 145 211 / 0.07);
+  --bd-f2: rgb(140 170 210 / 0.14); --bd-f2b: rgb(140 170 210 / 0.05);
+  --bd-f3: rgb(132 190 229 / 0.06); --bd-f4: rgb(0 145 211 / 0.13);
+  --bd-grid: rgb(255 255 255 / 0.075); --bd-dot: rgb(132 190 229 / 0.95);
+  --bd-glow: rgb(0 145 211 / 0.2); --bd-glow-b: rgb(0 145 211 / 0.07);
+  --bd-ripple: rgb(132 190 229 / 0.75); --bd-scan: rgb(255 255 255 / 0.022);
+  /* cards */
+  --panel-top: rgb(255 255 255 / 0.035);
+  --panel-spot: rgb(0 145 211 / 0.16); --panel-edge: rgb(132 190 229 / 0.75);
+  /* legacy SCADA panel: deliberately dated grey in both modes */
+  --hmi-bg: #3A4146; --hmi-border: #596268; --hmi-ink: #D3D9DD;
+  /* overlays */
+  --scrim: rgb(0 0 0 / 0.78); --selection: rgb(0 145 211 / 0.45);
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- light mode */
+:root[data-theme="light"] {
+  --color-bg: #DCEBF7;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EAF2FA;
+  --color-surface-3: #DCE9F6;
+  --color-line: #C5D6E8;
+  --color-line-2: #DAE6F2;
+  --color-line-3: #9DB8D2;
+  --color-ink: #0F2537;
+  --color-ink-2: #3E5568;
+  --color-ink-3: #5D7489;
+  --color-accent: #0B6FA8;
+  --color-accent-2: #DCEEFA;
+  --color-brand-deep: #0A5F94;   /* a darker cerulean for primary buttons */
+  --color-ok: #2E7D5B;
+  --color-ok-2: #E1F0E8;
+  --color-warn: #C98A00;
+  --color-warn-ink: #8C6100;
+  --color-warn-2: #FAF0D6;
+  --color-crit: #B83A2E;
+  --color-crit-2: #F7E0DC;
+  --color-iso: #6B3FA0;
+  --color-iso-2: #EEE6F6;
+  --color-legacy: #3B4247;
+  --color-header: #0E3A5B;       /* deep navy band: the darker accent */
+  --color-bar: #F4F9FD;
+  --color-canvas: #F3F8FD;
+  --shadow-card: 0 1px 2px rgb(16 42 67 / 0.06), 0 12px 30px -18px rgb(16 42 67 / 0.32);
+  --shadow-pop: 0 16px 40px -14px rgb(16 42 67 / 0.4);
+  --shadow-float: 0 30px 80px -24px rgb(8 30 52 / 0.55);
+
+  --pf-pipe: #CFDCEA; --pf-steel: #7F93A6; --pf-flow: #0091D3; --pf-milk: #A9D2EE; --pf-particle: #0B6FA8;
+  --pf-shell: #F4F8FC; --pf-ok-tint: #CFE5D8; --pf-dots: #CCDBEA; --pf-tank-hot: #E3A79F; --pf-tank-warm: #E9CC85;
+  --ch-silo: #7A5C99; --ch-orange: #B5532D;
+  --bd-base: linear-gradient(160deg, #F2F8FD 0%, #E2EEF9 34%, #D3E4F4 68%, #C8DAEE 100%);
+  --bd-f1: rgb(132 190 229 / 0.9); --bd-f1b: rgb(132 190 229 / 0.45);
+  --bd-f2: rgb(140 170 210 / 0.85); --bd-f2b: rgb(140 170 210 / 0.4);
+  --bd-f3: rgb(255 255 255 / 0.9); --bd-f4: rgb(0 145 211 / 0.28);
+  --bd-grid: rgb(11 111 168 / 0.14); --bd-dot: rgb(0 145 211 / 0.85);
+  --bd-glow: rgb(255 255 255 / 0.9); --bd-glow-b: rgb(255 255 255 / 0.35);
+  --bd-ripple: rgb(0 145 211 / 0.6); --bd-scan: rgb(11 111 168 / 0.03);
+  --panel-top: rgb(255 255 255 / 0);
+  --panel-spot: rgb(0 145 211 / 0.07); --panel-edge: rgb(0 145 211 / 0.5);
+  --hmi-bg: #2B3034; --hmi-border: #1C2023; --hmi-ink: #C9CFD3;
+  --scrim: rgb(12 34 54 / 0.5); --selection: rgb(132 190 229 / 0.6);
+  color-scheme: light;
+}
+
+/* The navy header band in light mode: text and lines inside it switch to light-on-dark.
+   Pop-ups that open from the band (.unband) switch back to the normal light values. */
+:root[data-theme="light"] .band {
+  --color-ink: #FFFFFF; --color-ink-2: #C4DAEC; --color-ink-3: #9BB9D2;
+  --color-line: rgb(255 255 255 / 0.18); --color-line-2: rgb(255 255 255 / 0.1);
+  --color-surface-2: rgb(255 255 255 / 0.12); --color-accent: #84BEE5; --color-accent-2: rgb(255 255 255 / 0.12);
+}
+:root[data-theme="light"] .band .unband {
+  --color-ink: #0F2537; --color-ink-2: #3E5568; --color-ink-3: #5D7489;
+  --color-line: #C5D6E8; --color-line-2: #DAE6F2;
+  --color-surface-2: #EAF2FA; --color-accent: #0B6FA8; --color-accent-2: #DCEEFA;
+}

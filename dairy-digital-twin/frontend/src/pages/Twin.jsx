@@ -34,7 +34,7 @@ export default function Twin({ frame, mode, history, call, notify }) {
       </div>
 
       <button onClick={toggle} aria-expanded={open}
-        className="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface/80 px-5 py-3.5 text-left backdrop-blur-sm hover:border-[#3D3D40] hover:bg-surface">
+        className="group flex w-full items-center gap-3 rounded-xl border border-line bg-surface/80 px-5 py-3.5 text-left backdrop-blur-sm hover:border-line-3 hover:bg-surface">
         <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-2 text-accent"><LineChart size={18} /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-[16px] font-semibold text-ink">{open ? 'Hide the evidence' : 'Show the evidence'}</span>

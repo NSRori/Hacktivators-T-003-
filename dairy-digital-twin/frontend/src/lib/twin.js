@@ -121,12 +121,12 @@ export const UNITS = ['silo', 'pasteurizer_a', 'pasteurizer_b', 'homogenizer', '
 
 /** Engine status → theme classes. Every status also gets an icon + a word (never colour alone). */
 export const TONE = {
-  OK: { word: 'Normal', text: 'text-ok', soft: 'bg-ok-2', fill: 'bg-ok', outline: 'outline-line', hex: '#3DB07E' },
-  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#4FB3EA' },
-  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: '#4FB3EA' },
-  WARN: { word: 'Warning', text: 'text-warn-ink', soft: 'bg-warn-2', fill: 'bg-warn', outline: 'outline-warn', hex: '#E3A41A' },
-  CRITICAL: { word: 'Critical', text: 'text-crit', soft: 'bg-crit-2', fill: 'bg-crit', outline: 'outline-crit', hex: '#E5604F' },
-  QUARANTINED: { word: 'Isolated', text: 'text-iso', soft: 'bg-iso-2', fill: 'bg-iso', outline: 'outline-iso', hex: '#A07AD9' },
+  OK: { word: 'Normal', text: 'text-ok', soft: 'bg-ok-2', fill: 'bg-ok', outline: 'outline-line', hex: 'var(--color-ok)' },
+  WATCH: { word: 'Watch', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: 'var(--color-accent)' },
+  MAINT: { word: 'Maintenance', text: 'text-accent', soft: 'bg-accent-2', fill: 'bg-accent', outline: 'outline-accent', hex: 'var(--color-accent)' },
+  WARN: { word: 'Warning', text: 'text-warn-ink', soft: 'bg-warn-2', fill: 'bg-warn', outline: 'outline-warn', hex: 'var(--color-warn)' },
+  CRITICAL: { word: 'Critical', text: 'text-crit', soft: 'bg-crit-2', fill: 'bg-crit', outline: 'outline-crit', hex: 'var(--color-crit)' },
+  QUARANTINED: { word: 'Isolated', text: 'text-iso', soft: 'bg-iso-2', fill: 'bg-iso', outline: 'outline-iso', hex: 'var(--color-iso)' },
 }
 export const LEGACY = {
   GREEN: { word: 'All green', hex: '#3FAE5A' },

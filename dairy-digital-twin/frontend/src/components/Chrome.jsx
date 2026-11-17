@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, CheckCircle2, Pause, Play, Presentation, RotateCcw, SlidersHorizontal, TriangleAlert, Unplug, Volume2, VolumeX, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, Moon, Pause, Play, Presentation, RotateCcw, SlidersHorizontal, Sun, TriangleAlert, Unplug, Volume2, VolumeX, XCircle } from 'lucide-react'
+import { toggleTheme, useTheme } from '../lib/theme'
 import { caption, clock, SCENARIOS, TABS } from '../lib/twin'
 import { attention } from '../lib/actions'
 import { mission } from '../lib/mission'
@@ -13,6 +14,19 @@ export function LogoMark({ size = 30 }) {
       <path d="M11 7h10v4l2.5 3.5V25a1.5 1.5 0 0 1-1.5 1.5H10A1.5 1.5 0 0 1 8.5 25V14.5L11 11z" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
       <path d="M8.5 18.5h15" stroke="#fff" strokeWidth="1.8" />
     </svg>
+  )
+}
+
+/** Light / dark switch (key T). */
+export function ThemeToggle() {
+  const t = useTheme()
+  const light = t === 'light'
+  return (
+    <button onClick={() => { (light ? sfx.off : sfx.on)(); toggleTheme() }} title={`Switch to ${light ? 'dark' : 'light'} mode (T)`}
+      aria-label={`Switch to ${light ? 'dark' : 'light'} mode`}
+      className="grid h-9 w-9 place-items-center rounded-md border border-line text-ink-2 hover:border-line-3 hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent">
+      {light ? <Moon size={17} /> : <Sun size={17} />}
+    </button>
   )
 }
 
@@ -33,7 +47,7 @@ function ControlsMenu({ mode, call, presenter, setPresenter }) {
         <SlidersHorizontal size={16} />Controls
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-[290px] rounded-lg border border-line bg-surface p-4 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.85)]">
+        <div className="unband absolute right-0 top-full z-50 mt-2 w-[290px] rounded-lg border border-line bg-surface p-4 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.85)]">
           <div className="text-[13px] font-semibold text-ink-2">Simulation speed</div>
           <div className="mt-1.5 grid grid-cols-4 overflow-hidden rounded-md border border-line">
             {SPEEDS.map(([ts, lab]) => (
@@ -60,6 +74,7 @@ function ControlsMenu({ mode, call, presenter, setPresenter }) {
             <li className="flex justify-between"><span>Auto-Isolate on/off</span><Kbd>I</Kbd></li>
             <li className="flex justify-between"><span>Presenter mode</span><Kbd>P</Kbd></li>
             <li className="flex justify-between"><span>Sound on/off</span><Kbd>M</Kbd></li>
+            <li className="flex justify-between"><span>Light / dark mode</span><Kbd>T</Kbd></li>
           </ul>
         </div>
       )}
@@ -70,7 +85,7 @@ function ControlsMenu({ mode, call, presenter, setPresenter }) {
 export function AppHeader({ route, go, frame, mode, connected, call, presenter, setPresenter }) {
   const state = !connected ? ['Offline', 'bg-crit'] : mode?.paused ? ['Paused', 'bg-warn'] : ['Live', 'bg-ok']
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-[#000000]/85 backdrop-blur-md">
+    <header className="band sticky top-0 z-40 border-b border-line bg-header/90 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1680px] items-stretch gap-6 px-6">
         <button onClick={() => go('home')} className="flex items-center gap-2.5" title="Back to the homepage">
           <LogoMark />
@@ -89,6 +104,7 @@ export function AppHeader({ route, go, frame, mode, connected, call, presenter, 
           <span className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1 text-[13.5px] font-semibold text-ink">
             {connected ? <span className={`live-dot h-2 w-2 rounded-full ${state[1]}`} /> : <Unplug size={14} className="text-crit" />}{state[0]}
           </span>
+          <ThemeToggle />
           <ControlsMenu mode={mode} call={call} presenter={presenter} setPresenter={setPresenter} />
         </div>
       </div>
@@ -119,7 +135,7 @@ export function ScenarioBar({ frame, mode, call }) {
   const active = frame?.scenario
   const since = frame && frame.scenario_tick !== null && frame.scenario_tick !== undefined ? frame.tick - frame.scenario_tick : null
   return (
-    <div className="border-b border-line bg-[#0E0E0F]/70 backdrop-blur-sm">
+    <div className="border-b border-line bg-bar/80 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2 px-6 py-2.5">
         <span className="mr-1 text-[14px] font-semibold text-ink">Scenarios</span>
         {SCENARIOS.map((s) => {
@@ -158,7 +174,7 @@ export function ScenarioBar({ frame, mode, call }) {
 
 /* ---------------------------------------------------------------- the incident, as a story */
 const STEP = {
-  done: { ring: 'border-ok bg-ok text-[#08130D]', bar: 'bg-ok', title: 'text-ink', detail: 'text-ink-2' },
+  done: { ring: 'border-ok bg-ok-deep text-white', bar: 'bg-ok', title: 'text-ink', detail: 'text-ink-2' },
   active: { ring: 'border-accent bg-accent-2 text-accent', bar: 'bg-line', title: 'text-ink', detail: 'text-accent' },
   fail: { ring: 'border-crit bg-crit-2 text-crit', bar: 'bg-crit', title: 'text-ink', detail: 'text-crit' },
   wait: { ring: 'border-line bg-surface-2 text-ink-3', bar: 'bg-line', title: 'text-ink-2', detail: 'text-ink-3' },

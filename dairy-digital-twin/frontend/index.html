@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dairy Digital Twin</title>
+    <script>
+      /* apply the saved light / dark theme before the first paint, so the page never flashes the wrong one */
+      try { document.documentElement.dataset.theme = localStorage.getItem('ddt.theme.v1') === 'light' ? 'light' : 'dark' } catch (e) { document.documentElement.dataset.theme = 'dark' }
+    </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237dd3fc' stroke-width='2'><path d='M8 2h8v4l2 3v13H6V9l2-3z'/></svg>" />
   </head>
   <body>

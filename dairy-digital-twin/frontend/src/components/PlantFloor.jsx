@@ -10,8 +10,10 @@ import { useZoomed } from './widgets'
 const W = 252
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v))
 const CALM = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-const C = { line: '#2E2E31', line2: '#1E1E20', steel: '#7F93A6', ink: '#F2F4F6', ink2: '#B5BCC4', accent: '#4FB3EA', flow: '#1AA3E6', milk: '#CFE6F6',
-  shell: '#0E0E0F', ok: '#3DB07E', okTint: '#24503A', warn: '#E3A41A', crit: '#E5604F', iso: '#A07AD9' }
+/* every colour is a theme variable (src/theme.css), so light / dark mode repaint the floor without re-rendering */
+const C = { line: 'var(--pf-pipe)', line2: 'var(--color-line-2)', steel: 'var(--pf-steel)', ink: 'var(--color-ink)', ink2: 'var(--color-ink-2)',
+  accent: 'var(--color-accent)', flow: 'var(--pf-flow)', milk: 'var(--pf-milk)', particle: 'var(--pf-particle)', shell: 'var(--pf-shell)',
+  ok: 'var(--color-ok)', okTint: 'var(--pf-ok-tint)', warn: 'var(--color-warn)', crit: 'var(--color-crit)', iso: 'var(--color-iso)' }
 
 /* ------------------------------------------------------------------ equipment drawings */
 function Vessel({ level, target = 50 }) {
@@ -19,7 +21,7 @@ function Vessel({ level, target = 50 }) {
   const w = 54
   const h = 104
   const lv = clamp(level ?? 0, 0, 100)
-  const fillCol = lv > 95 || lv < 8 ? '#EE8E80' : lv > 82 || lv < 18 ? '#EFC766' : C.milk
+  const fillCol = lv > 95 || lv < 8 ? 'var(--pf-tank-hot)' : lv > 82 || lv < 18 ? 'var(--pf-tank-warm)' : C.milk
   const inner = h - 14
   const top = 7 + inner - (inner * lv) / 100
   const ty = 7 + inner * (1 - target / 100)
@@ -34,7 +36,7 @@ function Vessel({ level, target = 50 }) {
       <defs>
         <clipPath id={`c${id}`}><rect x="5" y="7" width={w - 8} height={inner} rx="8" /></clipPath>
         <linearGradient id={`g${id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={fillCol} stopOpacity="1" /><stop offset="1" stopColor={fillCol} stopOpacity="0.7" />
+          <stop offset="0" style={{ stopColor: fillCol, stopOpacity: 1 }} /><stop offset="1" style={{ stopColor: fillCol, stopOpacity: 0.7 }} />
         </linearGradient>
       </defs>
       <rect x="1" y="1" width={w} height={h - 2} rx="12" fill={C.shell} stroke={C.steel} strokeWidth="2" />
@@ -290,7 +292,7 @@ function Pipe(props) {
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className={moving ? 'flow-dash' : ''}
         style={{ stroke: color, strokeWidth: moving ? 2 + Math.min(3.5, flow / 240) : 2, strokeDasharray: data.blocked ? '4 5' : undefined,
           animationDuration: `${clamp(320 / Math.max(flow, 1), 0.3, 3)}s` }} />
-      {moving && !CALM && <Particles path={path} flow={flow} color={data.spoof || data.tone === 'CRITICAL' ? C.crit : data.tone === 'WARN' ? C.warn : C.milk} />}
+      {moving && !CALM && <Particles path={path} flow={flow} color={data.spoof || data.tone === 'CRITICAL' ? C.crit : data.tone === 'WARN' ? C.warn : C.particle} />}
       <EdgeLabelRenderer>
         <div className="nodrag nopan num absolute rounded border bg-surface px-1.5 py-px text-[12.5px] font-semibold"
           style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)`, color: data.blocked ? C.iso : data.spoof ? C.crit : C.ink,
@@ -348,7 +350,7 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
   }, [])
   useEffect(() => () => setHover(null), [setHover])   // leaving the focus view: no hover card left hanging
   return (
-    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[11px] bg-[#050505]">
+    <div ref={box} className="relative min-h-[420px] flex-1 rounded-b-[11px] bg-canvas">
       <NodeData.Provider value={view}>
         <Ui.Provider value={ui}>
           <ReactFlow nodes={NODES} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={FIT}
@@ -363,7 +365,7 @@ function FloorCanvas({ view, edges, ui, setHover, setPinned }) {
             nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
             zoomOnScroll={zoomed} panOnDrag={zoomed} zoomOnDoubleClick={zoomed} zoomOnPinch={zoomed} preventScrolling={zoomed}
             minZoom={0.3} maxZoom={2.5} style={{ background: 'transparent' }}>
-            <Background color="#262628" bgColor="#050505" gap={22} size={1.2} />
+            <Background color="var(--pf-dots)" bgColor="var(--color-canvas)" gap={22} size={1.2} />
             {zoomed && <Controls showInteractive={false} position="bottom-left" fitViewOptions={FIT} />}
           </ReactFlow>
         </Ui.Provider>
