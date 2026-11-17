@@ -159,6 +159,51 @@ for iso in (False, True):
     else:
         check("ON: no warm milk released", o["kpi"]["at_risk_l"] == 0)
 
+print("\n=== SCENARIOS 5-7: ANY FAULT ON ANY UNIT ===")
+
+
+def first_flag(fr, unit):
+    """Minutes after injection until the engine marks the unit non-OK (None = never)."""
+    for i, f in enumerate(fr[30:]):
+        if f["out"]["engine"]["units"][unit]["status"] != "OK":
+            return i
+    return None
+
+
+# leaks: the mass balance must find every one of them quickly, while the legacy SCADA stays green on that unit
+for unit in ("silo", "pasteurizer_b", "homogenizer", "surge_tank", "filler", "packaging"):
+    p, b, fr = run("leak", target=unit, auto_sync=False, ticks=40)
+    t = first_flag(fr, unit)
+    legacy_green = all(f["out"]["legacy"]["units"][unit]["status"] == "GREEN" for f in fr[30:])
+    print(f"   leak on {unit:13s}: engine flags it +{t} min | legacy unit always GREEN: {legacy_green} | lost {p.lost_l:.0f} L")
+    check(f"leak on {unit} detected within 5 min", t is not None and t <= 5)
+p, b, fr = run("leak", target="homogenizer", auto_sync=True, ticks=60)
+check("Auto-Sync dispatches the repair crew and the leak stops",
+      "homogenizer" not in p.faults and any(t["status"] == "RESOLVED" for t in b.tickets), f"(tickets {[(t['id'], t['status']) for t in b.tickets]})")
+
+# cyber takeover of the silo (the drain valve opens; the PLC keeps reporting the old level)
+p, b, fr = run("cyber_takeover", target="silo", auto_isolate=False, ticks=60)
+rep = fr[-1]["tel"]["stages"]["silo"]["level_pct"]
+print(f"   silo takeover, Auto-Isolate OFF: actual level {100 * p.silo_l / 24000:.0f} % | PLC reports {rep:.0f} % | "
+      f"legacy silo {fr[-1]['out']['legacy']['units']['silo']['status']} | lost {p.lost_l:.0f} L")
+check("OFF: the silo is drained while its PLC still reports a normal level", p.silo_l < 1000 and rep > 40)
+check("OFF: engine flags the rogue write on the silo", any(a["type"] == "UNAUTHORIZED_WRITE" and a["unit"] == "silo" for a in b.alerts))
+p, b, fr = run("cyber_takeover", target="silo", auto_isolate=True, ticks=60)
+print(f"   silo takeover, Auto-Isolate ON : actual level {100 * p.silo_l / 24000:.0f} % | blocked {sorted(p.blocked_ips)} | lost {p.lost_l:.0f} L")
+check("ON: attacker blocked and the silo keeps its milk", "192.168.66.6" in p.blocked_ips and p.silo_l > 0.4 * 24000)
+for unit in ("homogenizer", "filler", "pasteurizer_b"):
+    p, b, fr = run("cyber_takeover", target=unit, auto_isolate=True, ticks=40)
+    t = first_flag(fr, unit)
+    check(f"takeover of {unit}: flagged within 5 min and attacker blocked", t is not None and t <= 5 and "192.168.66.6" in p.blocked_ips)
+
+# motor trips: loud (legacy sees them too) - the engine adds the knock-on effects and sends the repair crew
+for unit in ("filler", "homogenizer", "surge_tank"):
+    p, b, fr = run("motor_trip", target=unit, auto_sync=True, ticks=60)
+    t = first_flag(fr, unit)
+    end = fr[-1]["tel"]["stages"]["filler"]["flow_lpm"]
+    print(f"   motor trip on {unit:12s}: engine +{t} min | knock-on stages {len(fr[32]['out']['engine']['pillar1']['cascade'])} | filler at end {end:.0f} L/min")
+    check(f"motor trip on {unit}: flagged at once and repaired by Auto-Sync", t is not None and t <= 1 and unit not in p.faults and end > 600)
+
 print("\n=== DETERMINISM ===")
 a = run("drift", ticks=80)[2]
 c = run("drift", ticks=80)[2]

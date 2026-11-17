@@ -21,6 +21,8 @@ from engine import (DairyPlant, KNOWN_HOSTS, NOMINAL_FLOW, PAST_SHARE_LPM, PUMP_
                     SCADA_MASTER, SILO_CAP_L, TANK_CAP_L, HOMOG_PRESSURE_PSI, VIB_BASE, VIB_FAIL,
                     HOMOG_CAP_LPM)
 
+LEAK_RESIDUAL_LPM = 25.0        # litres per minute unaccounted for (well above the meters' noise)
+
 UNITS = ["silo", "pasteurizer_a", "pasteurizer_b", "homogenizer", "surge_tank", "filler", "packaging"]
 LABEL = {"silo": "Raw Chilling Silo", "pasteurizer_a": "Pasteurizer_A", "pasteurizer_b": "Pasteurizer_B",
          "homogenizer": "Homogenizer", "surge_tank": "Surge Tank", "filler": "Aseptic Filler",
@@ -77,6 +79,11 @@ def legacy_scada(tel):
                        (s["surge_tank"]["level_pct"] > 95, "AMBER", "level high")])
     put("filler", [(s["filler"]["flow_lpm"] < 50, "RED", "no product flow")])
     put("packaging", [(s["packaging"]["cold_room_temp_c"] > 6, "AMBER", "cold room warm")])
+    if s["silo"]["level_pct"] < 5 and units["silo"]["status"] == "GREEN":
+        units["silo"] = {"status": "AMBER", "reason": "level low"}
+    for u in units:                                   # a tripped drive raises its own fault bit: legacy sees that
+        if s[u].get("tripped"):
+            units[u] = {"status": "RED", "reason": "motor trip"}
     overall = max((u["status"] for u in units.values()), key=lambda x: LEGACY_RANK[x])
     return {"overall": overall, "units": units}
 
@@ -148,6 +155,8 @@ class ThreePillarEngine:
         self.bottled_hist = deque(maxlen=30)
         self.scn_bottled0 = 0.0
         self.anomaly = 0.0
+        self.phys = {}                        # unit -> (status, reason) from mass balance / drive trips
+        self.residual = {}                    # unit -> latest litres/min unaccounted for
         plant.log_sink = self.log
 
     # ------------------------------------------------------------------ utils
@@ -187,6 +196,19 @@ class ThreePillarEngine:
             return False, "already isolated"
         self._log("crit", "pillar3", f"MANUAL ISOLATION: {LABEL[unit]} quarantined by operator")
         return True, f"{LABEL[unit]} isolated"
+
+    def contain(self, unit):
+        """Operator response to a hijacked PLC: block every host that wrote to it (and isolate a pasteurizer)."""
+        ips = [ip for ip in self.uw_sources.get(unit, set()) if ip != SCADA_MASTER]
+        acts = [f"firewall blocked {ip}" for ip in ips if self.plant.block_ip(ip)]
+        if unit in ("pasteurizer_a", "pasteurizer_b"):
+            ok, msg = self.manual_isolate(unit)
+            if ok:
+                acts.append(msg)
+        if not acts:
+            return False, "nothing to contain on that unit"
+        self._log("crit", "pillar3", "MANUAL RESPONSE: " + "; ".join(acts))
+        return True, "; ".join(acts)
 
     def set_auto_isolate(self, on):
         self.auto_isolate = bool(on)
@@ -239,6 +261,7 @@ class ThreePillarEngine:
 
         # ---------------- Pillar 3: OT defense ----------------
         checks = self._cyber(tel, packets)
+        self._physical(tel)
 
         # ---------------- Pillar 1: closed-loop control ----------------
         if self.auto_sync:
@@ -282,7 +305,8 @@ class ThreePillarEngine:
                                   "throughput": round(float(z_thr), 2)},
                             "est_fouling_pct": round(est_f * 100, 1) if drift else None,
                             "t_to_bottleneck_min": _r(t_bottleneck), "t_starve_min": _r(t_starve),
-                            "t_overflow_min": _r(t_overflow), "cascade": cascade, "setpoints": tel["setpoints"]},
+                            "t_overflow_min": _r(t_overflow), "cascade": cascade, "setpoints": tel["setpoints"],
+                            "mass_balance": self.residual},
                 "pillar2": {"anomaly_score": round(self.anomaly, 3), "anomaly_flag": anomaly_flag,
                             "top_feature": top, "z": {n: round(float(v), 2) for n, v in zip(FEATURE_NAMES, z)},
                             "rul_min": {pm: _r(v) for pm, v in rul.items()},
@@ -346,7 +370,10 @@ class ThreePillarEngine:
         t = next((t for t in self.tickets if t["id"] == ticket_id), None)
         if t is None or t["status"] not in ("OPEN", "FAILED"):
             return False
-        ok = self.plant.start_flush() if t["kind"] == "fouling" else self.plant.dispatch_repair(t["unit"])
+        if t["kind"] == "repair":
+            ok = self.plant.fix_fault(t["unit"].split(":", 1)[1])
+        else:
+            ok = self.plant.start_flush() if t["kind"] == "fouling" else self.plant.dispatch_repair(t["unit"])
         if ok:
             t["status"], t["dispatched_tick"], t["auto"] = "DISPATCHED", self.plant.tick, auto
             self._log("info", "pillar2", f"{t['id']} {'auto-' if auto else ''}dispatched: {t['label']}")
@@ -496,6 +523,52 @@ class ThreePillarEngine:
             alert["action"] = "; ".join(acts)
             self._log("crit", "pillar3", "AUTO-RESPONSE: " + alert["action"])
 
+    # ================================================================== physical checks (any unit)
+    def _physical(self, tel):
+        """Mass balance per unit (litres in - litres out - change in level) catches leaks anywhere on the line;
+        a drive's own fault bit catches a tripped motor. Repairs go through Pillar 2 tickets."""
+        self.phys = {}
+        if len(self.h) < 2:
+            return
+        a, b = self.h[-2]["stages"], tel["stages"]
+        res = {}
+        for tank, i, o in (("silo", "intake_lpm", "flow_out_lpm"), ("surge_tank", "flow_in_lpm", "flow_out_lpm")):
+            if 0.5 < a[tank]["level_pct"] < 99.5 and 0.5 < b[tank]["level_pct"] < 99.5:
+                res[tank] = (b[tank][i] - b[tank][o]) - (b[tank]["level_l"] - a[tank]["level_l"])
+        for u in ("pasteurizer_a", "pasteurizer_b"):
+            res[u] = b[u]["flow_lpm"] - b[u]["outlet_flow_lpm"] if b[u]["flow_lpm"] > 50 else 0.0
+        res["homogenizer"] = b["homogenizer"]["flow_lpm"] - b["surge_tank"]["flow_in_lpm"]
+        res["filler"] = b["filler"]["flow_lpm"] - b["packaging"]["rate_lpm"]
+        res["packaging"] = b["packaging"]["rate_lpm"] - (b["packaging"]["units_total"] - a["packaging"]["units_total"])
+        self.residual = {k: round(v, 1) for k, v in res.items()}
+        repairing = set(tel.get("under_repair_units", []))
+        for u in UNITS:
+            leak = res.get(u, 0.0) > LEAK_RESIDUAL_LPM
+            self.consec[("leak", u)] = self.consec[("leak", u)] + 1 if leak else 0
+            tripped = bool(b[u].get("tripped"))
+            if self.consec[("leak", u)] >= 3:
+                self.phys[u] = ("CRITICAL" if res[u] > 80 else "WARN", f"leak - {res[u]:.0f} L/min unaccounted for")
+            if tripped:
+                self.phys[u] = ("CRITICAL", "motor tripped - no flow")
+            key = f"repair:{u}"
+            tk = self._open(key)
+            if u in self.phys and tk is None and not any(t["unit"] == key and t["status"] == "FAILED" for t in self.tickets):
+                kind = "Motor trip" if tripped else "Leak"
+                tk = self._ticket(key, f"{LABEL[u]} {'drive' if tripped else 'leak'}", f"{kind} - {self.phys[u][1]}", "repair")
+                tk["priority"] = "CRITICAL" if self.phys[u][0] == "CRITICAL" else "HIGH"
+                tk["metric"], tk["window"] = self.phys[u][1], "Send the repair crew now"
+                self._log("crit" if tripped else "warn", "pillar1", f"{LABEL[u]}: {self.phys[u][1]}")
+            if tk is None:
+                continue
+            if u in repairing:
+                self.phys[u] = ("MAINT", "repair crew on site")
+            if tk["status"] == "DISPATCHED" and u not in repairing and u not in self.phys:
+                tk["status"], tk["resolved_tick"] = "RESOLVED", tel["tick"]
+                tk["metric"] = "repaired - mass balance closes again" if not tripped else "drive restarted"
+                self._log("info", "pillar2", f"{tk['id']} resolved: {tk['label']} repaired")
+            elif self.auto_sync and tk["status"] == "OPEN":
+                self.dispatch(tk["id"], auto=True)
+
     # ================================================================== Pillar 1
     def _control(self, tel, drift, est_f):
         p, s = self.plant, tel["stages"]
@@ -584,6 +657,11 @@ class ThreePillarEngine:
             bump("silo", "CRITICAL", "overflow - milk to drain")
         elif t_overflow is not None and t_overflow < 60:
             bump("silo", "WARN", f"filling - overflow in {t_overflow:.0f} min")
+        for unit, (st, why) in self.phys.items():
+            if st == "MAINT":
+                u[unit] = {"status": "MAINT", "reason": why}
+            else:
+                bump(unit, st, why)
         for unit in tel["quarantined"]:
             u[unit] = {"status": "QUARANTINED", "reason": "isolated by diversion valve"}
         return u
@@ -592,6 +670,8 @@ class ThreePillarEngine:
         """Walk the NetworkX dependency graph from each root cause to the stages it will hit."""
         roots = [n for n in ("homogenizer", "pasteurizer_a", "pasteurizer_b")
                  if units[n]["status"] in ("WARN", "CRITICAL")]
+        roots += [n for n in UNITS if n not in roots and (n in self.phys and self.phys[n][0] != "MAINT"
+                  or units[n]["reason"] == "unauthorized write")]
         out, seen = [], set()
         for r in roots:
             for n in nx.descendants(self.G, r):

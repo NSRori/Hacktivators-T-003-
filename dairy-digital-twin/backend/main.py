@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from engine import PUMPS, SCENARIOS, DairyPlant
+from engine import ALL_SCENARIOS, FAULT_TYPES, FAULT_UNITS, PUMPS, SCENARIOS, DairyPlant
 from intelligence import ThreePillarEngine, baseline
 
 SEED = int(os.getenv("SEED", "42"))
@@ -131,8 +131,10 @@ async def history():
 
 @app.post("/api/scenario/{name}")
 async def scenario(name: str, target: str = "homogenizer_pump_1"):
-    if name not in SCENARIOS:
-        raise HTTPException(400, f"unknown scenario; choose one of {list(SCENARIOS)}")
+    if name not in ALL_SCENARIOS:
+        raise HTTPException(400, f"unknown scenario; choose one of {list(ALL_SCENARIOS)}")
+    if name in FAULT_TYPES and target not in FAULT_UNITS:
+        raise HTTPException(400, f"unknown unit; choose one of {list(FAULT_UNITS)}")
     if name == "pump_wear" and target not in PUMPS:
         raise HTTPException(400, f"unknown pump; choose one of {list(PUMPS)}")
     hub.plant.trigger(name, target=target)
@@ -169,6 +171,13 @@ async def isolate(unit: str):
 async def release(unit: str):
     ok = hub.plant.release(unit)
     return await done(ok, f"{unit} released" if ok else f"{unit} is not isolated")
+
+
+@app.post("/api/contain/{unit}")
+async def contain(unit: str):
+    """Operator response to a hijacked PLC: block the attacker (and isolate a pasteurizer)."""
+    ok, msg = hub.brain.contain(unit)
+    return await done(ok, msg)
 
 
 @app.post("/api/chiller/failover")

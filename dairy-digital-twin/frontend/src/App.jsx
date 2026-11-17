@@ -6,17 +6,19 @@ import Backdrop from './components/Backdrop'
 import { WidgetProvider } from './components/widgets'
 import { isMuted, setMuted, useClickFeel, useFeel } from './lib/feel'
 import { toggleTheme } from './lib/theme'
+import { useSteadyFrame } from './lib/steady'
 import Home from './pages/Home'
 import Twin from './pages/Twin'
 import { CyberPage, LogPage, MaintPage, SyncPage } from './pages/Pillars'
 
 export default function App() {
-  const { frame, history, packets, mode, connected } = useTwin()
+  const { frame: raw, history, packets, mode, connected } = useTwin()
+  const frame = useSteadyFrame(raw)                    // display-only averaging of noisy readings (lib/steady.js)
   const [route, go] = useRoute()
   const [toast, setToast] = useState(null)
   const [presenter, setPresenter] = useState(false)
   const timer = useRef(null)
-  useFeel(frame)
+  useFeel(raw)
   useClickFeel()
 
   const notify = useCallback((msg, ok = true) => {

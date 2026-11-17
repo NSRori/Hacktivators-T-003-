@@ -49,6 +49,22 @@ PUMPS = ("homogenizer_pump_1", "pasteurizer_a_pump")
 PUMP_LABEL = {"homogenizer_pump_1": "Homogenizer Pump #1", "pasteurizer_a_pump": "Pasteurizer_A Feed Pump"}
 SCENARIOS = ("drift", "pump_wear", "cyber_spike", "chiller_spoof")
 
+# ---------------- any-unit faults: pick a fault type AND a target unit ----------------
+# They run on their own code path: with no such fault active, every number (and every random draw) of the four
+# original scenarios is exactly what it was before.
+FAULT_TYPES = ("leak", "cyber_takeover", "motor_trip")
+FAULT_UNITS = ("silo", "pasteurizer_a", "pasteurizer_b", "homogenizer", "surge_tank", "filler", "packaging")
+ALL_SCENARIOS = SCENARIOS + FAULT_TYPES
+TANKS = ("silo", "surge_tank")
+UNIT_NAME = {"silo": "Raw Chilling Silo", "pasteurizer_a": "Pasteurizer_A", "pasteurizer_b": "Pasteurizer_B",
+             "homogenizer": "Homogenizer", "surge_tank": "Surge Tank", "filler": "Aseptic Filler",
+             "packaging": "Cold-Chain Packaging"}
+LEAK_TANK_LPM = 90.0            # a cracked tank loses 90 L/min
+LEAK_FRAC = 0.12                # a leaking line / seal loses 12 % of what flows through the unit
+DRAIN_LPM = {"silo": 450.0, "surge_tank": 300.0}   # attacker opens the drain valve
+HIJACK_SPEED = 0.3              # attacker forces a pump / drive down to 30 % speed
+FIX_TICKS = 10                  # repair crew time for a leak or a tripped motor
+
 
 class DairyPlant:
     def __init__(self, seed=42):
@@ -83,6 +99,9 @@ class DairyPlant:
         self.cip_valve_a_open = False
         self.scenario = None
         self.scenario_tick = None
+        self.scenario_target = None
+        self.faults = {}            # unit -> {"type", "tick", "fix_left", "frozen", "restored"}  (any-unit faults)
+        self.lost_l = 0.0           # milk lost to leaks or an opened drain
 
         # counters
         self.bottled_l = 0.0
@@ -125,6 +144,34 @@ class DairyPlant:
 
     def chiller_spoofed(self):
         return self.chiller_tick is not None and not self.chiller_failover
+
+    # ---- any-unit faults ----
+    def hijacked(self, unit):
+        """Rogue writes are reaching this unit's PLC (attack started, recon done, attacker not blocked)."""
+        f = self.faults.get(unit)
+        return (f is not None and f["type"] == "cyber_takeover" and self.tick - f["tick"] >= 3
+                and ROGUE_IP not in self.blocked_ips)
+
+    def _has(self, unit, kind):
+        f = self.faults.get(unit)
+        return f is not None and f["type"] == kind
+
+    def _speed(self, unit):
+        """Speed factor of a unit's drive: 0 when its motor tripped, 30 % when an attacker throttles it."""
+        if self._has(unit, "motor_trip"):
+            return 0.0
+        if unit not in TANKS and self.hijacked(unit):
+            return HIJACK_SPEED
+        return 1.0
+
+    def fix_fault(self, unit):
+        """Send the repair crew to a leak or a tripped motor (cyber takeovers are fixed by blocking the attacker)."""
+        f = self.faults.get(unit)
+        if f is None or f["type"] == "cyber_takeover" or f["fix_left"] is not None:
+            return False
+        f["fix_left"] = FIX_TICKS
+        self._event("info", f"Repair crew dispatched to {UNIT_NAME[unit]} ({FIX_TICKS} min)")
+        return True
 
     # ======================= control API =======================
     def set_intake(self, frac):
@@ -193,7 +240,23 @@ class DairyPlant:
         self._event("crit", "Chiller control segment isolated: redundant sensor + backup chiller loop engaged")
         return True
 
+    def _inject(self, kind, unit):
+        if unit not in FAULT_UNITS:
+            raise ValueError(f"unknown unit {unit}")
+        if kind == "cyber_takeover" and unit == "pasteurizer_a":
+            return self.trigger("cyber_spike")            # the original attack on A (overspeed + spoof)
+        self.scenario, self.scenario_tick, self.scenario_target = kind, self.tick, unit
+        self.faults[unit] = {"type": kind, "tick": self.tick, "fix_left": None, "frozen": None, "restored": False}
+        name = UNIT_NAME[unit]
+        what = {"leak": f"Leak started on {name}" + (" (cracked tank wall)" if unit in TANKS else " (failing seal)"),
+                "cyber_takeover": f"OT intrusion from {ROGUE_IP} targeting the {name} PLC",
+                "motor_trip": f"{name} {'outlet pump' if unit in TANKS else 'drive motor'} tripped (jam)"}[kind]
+        self._event("warn", f"[INJECT] {what}")
+        return True
+
     def trigger(self, name, target="homogenizer_pump_1"):
+        if name in FAULT_TYPES:
+            return self._inject(name, target)
         if name not in SCENARIOS:
             raise ValueError(f"unknown scenario {name}")
         self.scenario, self.scenario_tick = name, self.tick
@@ -226,10 +289,16 @@ class DairyPlant:
         cap_h = HOMOG_CAP_LPM * (1 - self.fouling) * self.pump_factor("homogenizer_pump_1")
         if self.flushing():
             cap_h *= FLUSH_CAPACITY
+        if self.faults:
+            cap_a *= self._speed("pasteurizer_a")
+            cap_b *= self._speed("pasteurizer_b")
+            cap_h *= self._speed("homogenizer")
 
         # ---- flows (1-minute volume balance with back-pressure) ----
         intake = NOMINAL_FLOW * self.intake_cmd
         demand = min(FILLER_CAP_LPM, NOMINAL_FLOW * self.filler_pace)
+        if self.faults:                                   # a stopped filler or packaging line stops the filling
+            demand *= self._speed("filler") * self._speed("packaging")
         a_sp = NOMINAL_FLOW * self.split_a
         if self.attack_on_a():
             a_sp *= 1.4                                   # rogue +40 % speed set-point
@@ -238,22 +307,44 @@ class DairyPlant:
         limit = min(cap_h,
                     (TANK_CAP_L - self.tank_l) / DT_MIN + demand,     # surge tank head-room
                     self.silo_l / DT_MIN + intake)                    # milk available
+        if self.faults:
+            limit *= self._speed("silo")                  # silo outlet pump tripped: nothing leaves the silo
         if fa + fb > limit:
             k = limit / (fa + fb)
             fa, fb = fa * k, fb * k
         process = fa + fb
+        # inline leaks: milk measured leaving a unit never reaches the next one
+        out_a, out_b, arrive, into_tank = fa, fb, process, process
+        if self.faults:
+            if self._has("pasteurizer_a", "leak"):
+                out_a = fa * (1 - LEAK_FRAC)
+            if self._has("pasteurizer_b", "leak"):
+                out_b = fb * (1 - LEAK_FRAC)
+            arrive = out_a + out_b
+            into_tank = arrive * (1 - LEAK_FRAC) if self._has("homogenizer", "leak") else arrive
 
         self.silo_l += (intake - process) * DT_MIN
         if self.silo_l > SILO_CAP_L:
             self.wasted_l += self.silo_l - SILO_CAP_L
             self.silo_l = SILO_CAP_L
         self.silo_l = max(0.0, self.silo_l)
+        if self.faults:
+            self.silo_l -= self._tank_loss("silo", self.silo_l)
 
-        draw = min(demand, self.tank_l / DT_MIN + process)
-        self.tank_l = float(np.clip(self.tank_l + (process - draw) * DT_MIN, 0.0, TANK_CAP_L))
+        draw = min(demand, self.tank_l / DT_MIN + into_tank)
+        if self.faults and self._has("surge_tank", "motor_trip"):
+            draw = 0.0                                    # surge outlet pump tripped: the filler gets nothing
+        self.tank_l = float(np.clip(self.tank_l + (into_tank - draw) * DT_MIN, 0.0, TANK_CAP_L))
+        if self.faults:
+            self.tank_l -= self._tank_loss("surge_tank", self.tank_l)
         if draw < demand * 0.98:
             self.starved_min += DT_MIN
-        self.bottled_l += draw
+        to_pack = packed = draw
+        if self.faults:
+            to_pack = draw * (1 - LEAK_FRAC) if self._has("filler", "leak") else draw
+            packed = to_pack * (1 - LEAK_FRAC) if self._has("packaging", "leak") else to_pack
+            self.lost_l += (process - into_tank) + (draw - packed)
+        self.bottled_l += packed
 
         # ---- temperatures / safety ----
         if self.chiller_spoofed():
@@ -284,13 +375,42 @@ class DairyPlant:
                     self._event("crit", f"{PUMP_LABEL[p]} SEAL FAILURE - hard breakdown")
 
         self.flows = {"intake": intake, "a": fa, "b": fb, "process": process, "draw": draw,
-                      "demand": demand, "cap_h": cap_h}
+                      "demand": demand, "cap_h": cap_h, "out_a": out_a, "out_b": out_b, "arrive": arrive,
+                      "tank_in": into_tank, "to_pack": to_pack}
         self._temps = (temp_a, temp_b, hold_a, hold_b)
         self._edge_events(draw, demand)
         self.packets = self._generate_packets()
         return self.telemetry()
 
+    def _tank_loss(self, tank, level):
+        """Litres lost this minute from a leaking tank or one whose drain valve an attacker opened."""
+        f = self.faults.get(tank)
+        if f is None:
+            return 0.0
+        if f["type"] == "leak":
+            rate = LEAK_TANK_LPM
+        elif self.hijacked(tank):
+            if f["frozen"] is None:                       # the PLC now replays the last level it saw
+                f["frozen"] = level
+            rate = DRAIN_LPM[tank]
+        else:
+            return 0.0
+        lost = min(level, rate * DT_MIN)
+        self.lost_l += lost
+        return lost
+
     def _progress_faults(self):
+        for u in list(self.faults):
+            f = self.faults[u]
+            if f["fix_left"] is not None:
+                f["fix_left"] -= 1
+                if f["fix_left"] <= 0:
+                    del self.faults[u]
+                    self._event("info", f"{UNIT_NAME[u]} repaired and back in service")
+            elif f["type"] == "cyber_takeover" and not f["restored"] and ROGUE_IP in self.blocked_ips:
+                f["restored"] = True
+                what = "drain valve closed" if u in TANKS else "speed set-point restored to last-known-good"
+                self._event("info", f"{UNIT_NAME[u]}: attacker cut off, {what}")
         if self.drift_active:
             self.fouling = min(FOULING_MAX, self.fouling + FOULING_MAX / DRIFT_TICKS)
         if self.flushing():
@@ -360,6 +480,18 @@ class DairyPlant:
                                         txn=int(self.rng.integers(1, 60000))))
                     if not pk[-1]["blocked"] and "pasteurizer_a" not in self.quarantined:
                         self.cip_valve_a_open = True
+        for u, ft in self.faults.items():
+            if ft["type"] != "cyber_takeover":
+                continue
+            age = self.tick - ft["tick"]
+            if age < 3:
+                for _ in range(int(self.rng.integers(7, 11))):
+                    pk.append(self._pkt(ROGUE_IP, str(self.rng.choice(units)), int(self.rng.choice([3, 43])),
+                                        "device_scan", txn=int(self.rng.integers(1, 60000))))
+            elif u in TANKS:
+                pk.append(self._pkt(ROGUE_IP, u, 5, "drain_valve", 1, txn=int(self.rng.integers(1, 60000))))
+            else:
+                pk.append(self._pkt(ROGUE_IP, u, 6, "speed_sp", round(HIJACK_SPEED * 100), txn=int(self.rng.integers(1, 60000))))
         if self.chiller_tick is not None and self.tick - self.chiller_tick in (0, 1):
             pk.append(self._pkt("10.0.0.20", "chiller", 101, "chiller_1.temp_pv.override", 4.0, proto="OPC-UA"))
         return pk
@@ -375,6 +507,14 @@ class DairyPlant:
             hold_a_rep = 15.0 * HOLD_TUBE_RATED_LPM / PAST_SHARE_LPM
         silo_temp_rep = SILO_TEMP_C + n(0.04) if self.chiller_spoofed() else self.silo_temp + n(0.04)
         vib = {p: (0.0 if self.failed[p] else VIB_BASE + 5.1 * self.wear[p] ** 1.5 + n(0.05)) for p in PUMPS}
+        silo_rep, tank_rep = self.silo_l, self.tank_l    # a hijacked tank PLC replays the level it saw last
+        for tank in TANKS:
+            ft = self.faults.get(tank)
+            if ft is not None and ft["frozen"] is not None and self.hijacked(tank):
+                if tank == "silo":
+                    silo_rep = ft["frozen"]
+                else:
+                    tank_rep = ft["frozen"]
         p_noise = 6.0 * (1 + 3 * self.wear["homogenizer_pump_1"])
         pressure = 0.0 if self.failed["homogenizer_pump_1"] else (
             HOMOG_PRESSURE_PSI + 400 * self.fouling - 120 * self.wear["homogenizer_pump_1"] ** 2 + n(p_noise))
@@ -384,9 +524,10 @@ class DairyPlant:
             "tick": self.tick,
             "sim_min": self.tick * DT_MIN,
             "stages": {
-                "silo": {"level_pct": r1(100 * self.silo_l / SILO_CAP_L), "level_l": round(self.silo_l),
+                "silo": {"level_pct": r1(100 * silo_rep / SILO_CAP_L), "level_l": round(silo_rep),
                          "temp_c": r2(silo_temp_rep), "intake_lpm": r1(f["intake"] + n(2)),
-                         "flow_out_lpm": r1(f["process"] + n(2)), "intake_cmd_pct": r1(self.intake_cmd * 100)},
+                         "flow_out_lpm": r1(f["process"] + n(2)), "intake_cmd_pct": r1(self.intake_cmd * 100),
+                         "tripped": self._has("silo", "motor_trip")},
                 "pasteurizer_a": {"flow_lpm": r1(max(0.0, fa_rep + n(2)) if fa_rep > 0 else 0.0),
                                   "temp_c": r2(ta_rep + n(0.08)), "hold_time_s": r1(hold_a_rep),
                                   "speed_pct": r1(speed_a if f["a"] > 0 else 0.0),
@@ -395,7 +536,8 @@ class DairyPlant:
                                   "load_share_pct": r1(self.split_a * 100),
                                   "quarantined": "pasteurizer_a" in self.quarantined,
                                   "valve_open": "pasteurizer_a" not in self.quarantined,
-                                  "cip_valve_open": self.cip_valve_a_open},
+                                  "cip_valve_open": self.cip_valve_a_open,
+                                  "outlet_flow_lpm": r1(f.get("out_a", f["a"])), "tripped": self._has("pasteurizer_a", "motor_trip")},
                 "pasteurizer_b": {"flow_lpm": r1(max(0.0, f["b"] + n(2)) if f["b"] > 0 else 0.0),
                                   "temp_c": r2(temp_b + n(0.08)), "hold_time_s": r1(hold_b),
                                   "speed_pct": r1(100.0 if f["b"] > 0 else 0.0),
@@ -404,26 +546,30 @@ class DairyPlant:
                                   "load_share_pct": r1((1 - self.split_a) * 100),
                                   "quarantined": "pasteurizer_b" in self.quarantined,
                                   "valve_open": "pasteurizer_b" not in self.quarantined,
-                                  "cip_valve_open": False},
-                "homogenizer": {"flow_lpm": r1(f["process"] + n(2)), "pressure_psi": r1(pressure),
-                                "valve_position_pct": r1(55 + 60 * self.fouling), "flushing": self.flushing()},
-                "surge_tank": {"level_pct": r1(100 * self.tank_l / TANK_CAP_L), "level_l": round(self.tank_l),
-                               "flow_in_lpm": r1(f["process"]), "flow_out_lpm": r1(f["draw"]), "temp_c": r2(4.5 + n(0.05))},
+                                  "cip_valve_open": False,
+                                  "outlet_flow_lpm": r1(f.get("out_b", f["b"])), "tripped": self._has("pasteurizer_b", "motor_trip")},
+                "homogenizer": {"flow_lpm": r1(f.get("arrive", f["process"]) + n(2)), "pressure_psi": r1(pressure),
+                                "valve_position_pct": r1(55 + 60 * self.fouling), "flushing": self.flushing(),
+                                "tripped": self._has("homogenizer", "motor_trip")},
+                "surge_tank": {"level_pct": r1(100 * tank_rep / TANK_CAP_L), "level_l": round(tank_rep),
+                               "flow_in_lpm": r1(f.get("tank_in", f["process"])), "flow_out_lpm": r1(f["draw"]), "temp_c": r2(4.5 + n(0.05)),
+                               "tripped": self._has("surge_tank", "motor_trip")},
                 "filler": {"flow_lpm": r1(f["draw"]), "demand_lpm": r1(f["demand"]), "pace_pct": r1(self.filler_pace * 100),
-                           "starved": f["draw"] < f["demand"] * 0.98},
-                "packaging": {"rate_lpm": r1(f["draw"]), "units_total": int(self.bottled_l),
-                              "cold_room_temp_c": r2(3.5 + n(0.05))},
+                           "starved": f["draw"] < f["demand"] * 0.98, "tripped": self._has("filler", "motor_trip")},
+                "packaging": {"rate_lpm": r1(f.get("to_pack", f["draw"])), "units_total": int(self.bottled_l),
+                              "cold_room_temp_c": r2(3.5 + n(0.05)), "tripped": self._has("packaging", "motor_trip")},
             },
             "pumps": {p: {"label": PUMP_LABEL[p], "vibration_mms": r2(vib[p]), "failed": self.failed[p],
                           "under_repair": p in self.repairs} for p in PUMPS},
             "counters": {"bottled_l": round(self.bottled_l), "wasted_l": round(self.wasted_l),
                          "unsafe_l": round(self.unsafe_l), "at_risk_l": round(self.at_risk_l),
-                         "starved_min": self.starved_min},
+                         "starved_min": self.starved_min, "lost_l": round(self.lost_l)},
             "setpoints": {"intake_pct": r1(self.intake_cmd * 100), "filler_pace_pct": r1(self.filler_pace * 100),
                           "split_a_pct": r1(self.split_a * 100)},
             "blocked_ips": sorted(self.blocked_ips),
             "quarantined": sorted(self.quarantined),
-            "scenario": self.scenario, "scenario_tick": self.scenario_tick,
+            "scenario": self.scenario, "scenario_tick": self.scenario_tick, "scenario_target": self.scenario_target,
+            "under_repair_units": sorted(u for u, x in self.faults.items() if x["fix_left"] is not None),
             "chiller_failover": self.chiller_failover,
         }
 
