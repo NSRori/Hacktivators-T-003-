@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  background: #060a11;
+  color: #cbd5e1;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(10, 15, 28, 0.92));
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  border-radius: 14px;
+}
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* animated milk flow on topology edges */
+.flow-dash { stroke-dasharray: 9 7; animation: flow-move linear infinite; }
+@keyframes flow-move { to { stroke-dashoffset: -32; } }
+
+@keyframes crit-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.0); }
+  50% { box-shadow: 0 0 22px 2px rgba(239, 68, 68, 0.55); }
+}
+.pulse-crit { animation: crit-pulse 1.2s ease-in-out infinite; }
+@keyframes shield-pulse {
+  0%, 100% { box-shadow: 0 0 10px 0 rgba(217, 70, 239, 0.35); }
+  50% { box-shadow: 0 0 26px 4px rgba(217, 70, 239, 0.7); }
+}
+.pulse-shield { animation: shield-pulse 1.6s ease-in-out infinite; }
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+
+.react-flow__attribution { background: transparent !important; opacity: 0.35; }
+.react-flow__attribution a { color: #64748b !important; }
